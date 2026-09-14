@@ -1,4 +1,4 @@
-export type BaseMapType = 'google_hybrid' | 'google_satellite' | 'esri' | 'carto_voyager';
+export type BaseMapType = 'google_hybrid' | 'google_satellite' | 'yandex_hybrid' | 'yandex_satellite';
 
 export type VideoFormatType = 'youtube' | 'reels' | 'post' | 'portrait';
 

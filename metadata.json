@@ -1,6 +1,6 @@
 {
   "name": "3D Parsel Studio & Video Maker",
   "description": "3D parsel görselleştirme, sinematik kamera turları ve sosyal medya video üretici stüdyosu",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

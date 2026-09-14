@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Video as VideoIcon,
   Rotate3d,
+  LocateFixed,
 } from 'lucide-react';
 
 export default function App() {
@@ -167,6 +168,16 @@ export default function App() {
             <span className="hidden sm:inline">16:9</span>
           </button>
         </div>
+
+        {/* GPS Konum Butonu */}
+        <button
+          onClick={() => viewerMethods?.flyToDeviceLocation()}
+          className="min-h-[34px] sm:min-h-[36px] p-2 sm:px-2.5 sm:py-2 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-white/15 hover:border-sky-400/50 text-sky-400 hover:text-sky-300 text-xs font-medium flex items-center gap-1.5 backdrop-blur-xl shadow-xl transition active:scale-95"
+          title="Cihazımın GPS Konumuna Git"
+        >
+          <LocateFixed className="w-4 h-4 text-sky-400" />
+          <span className="hidden lg:inline">Konumum</span>
+        </button>
 
         {/* 3D Tur Hızlı Buton */}
         <button

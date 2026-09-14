@@ -7,7 +7,7 @@ import {
   VideoFormatType,
   WatermarkConfig,
 } from '../types';
-import { Mountain, Eye, EyeOff } from 'lucide-react';
+import { Mountain, Eye, EyeOff, LocateFixed, MapPin } from 'lucide-react';
 
 declare const Cesium: any;
 
@@ -31,6 +31,7 @@ export interface ViewerMethods {
   stopVideoRecording: () => void;
   isRecording: boolean;
   flyToParcel: () => void;
+  flyToDeviceLocation: () => void;
 }
 
 // 2D Canvas Watermark Renderer for Video & Snapshot
@@ -381,6 +382,9 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const [initError, setInitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [showGpsToast, setShowGpsToast] = useState(false);
+  const [gpsToastMessage, setGpsToastMessage] = useState('📍 Konumunuz Algılandı');
+  const deviceLocationCoordsRef = useRef<{ lng: number; lat: number } | null>(null);
 
   // Sync refs
   useEffect(() => {
@@ -415,48 +419,54 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [watermarkConfig.logoUrl]);
 
-  // Provider selector
+  // Provider selector with Ultra HD resolution settings
   const getProvider = useCallback((type: BaseMapType) => {
     if (typeof Cesium === 'undefined') return null;
 
     try {
       if (type === 'google_satellite') {
         const p = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+          url: 'https://mt{s}.google.com/vt/lyrs=s&scale=2&x={x}&y={y}&z={z}',
           subdomains: ['0', '1', '2', '3'],
-          maximumLevel: 21,
-          credit: 'Google Satellite',
+          tileWidth: 512,
+          tileHeight: 512,
+          maximumLevel: 22,
+          credit: 'Google Saf Uydu HD',
         });
         p.errorEvent?.addEventListener((err: any) => console.warn('Google Satellite tile error:', err));
         return p;
       }
 
-      if (type === 'esri') {
+      if (type === 'yandex_hybrid') {
         const p = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          maximumLevel: 19,
-          credit: 'Esri World Imagery',
+          url: 'https://sat0{s}.maps.yandex.net/tiles?l=sat,skl&x={x}&y={y}&z={z}&lang=tr_TR',
+          subdomains: ['1', '2', '3', '4'],
+          maximumLevel: 20,
+          credit: 'Yandex Hibrit Uydu HD',
         });
-        p.errorEvent?.addEventListener((err: any) => console.warn('Esri Imagery tile error:', err));
+        p.errorEvent?.addEventListener((err: any) => console.warn('Yandex Hybrid tile error:', err));
         return p;
       }
 
-      if (type === 'carto_voyager') {
+      if (type === 'yandex_satellite') {
         const p = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-          maximumLevel: 19,
-          credit: 'Carto Voyager',
+          url: 'https://sat0{s}.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}&lang=tr_TR',
+          subdomains: ['1', '2', '3', '4'],
+          maximumLevel: 20,
+          credit: 'Yandex Saf Uydu HD',
         });
-        p.errorEvent?.addEventListener((err: any) => console.warn('Carto Voyager tile error:', err));
+        p.errorEvent?.addEventListener((err: any) => console.warn('Yandex Satellite tile error:', err));
         return p;
       }
 
-      // Default: Google Hybrid Satellite + Roads & Kadastro Names
+      // Default: Google Hybrid Satellite + Roads & Kadastro Names in Ultra HD (scale=2, 512x512, zoom 22)
       const p = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        url: 'https://mt{s}.google.com/vt/lyrs=y&hl=tr&scale=2&x={x}&y={y}&z={z}',
         subdomains: ['0', '1', '2', '3'],
-        maximumLevel: 21,
-        credit: 'Google Hybrid Satellite Map',
+        tileWidth: 512,
+        tileHeight: 512,
+        maximumLevel: 22,
+        credit: 'Google Hibrit Uydu HD',
       });
       p.errorEvent?.addEventListener((err: any) => console.warn('Google Hybrid tile error:', err));
       return p;
@@ -579,27 +589,45 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           vrButton: false,
           infoBox: false,
           selectionIndicator: false,
-          useBrowserRecommendedResolution: true,
+          useBrowserRecommendedResolution: false, // Critical: Do NOT downsample resolution on retina/mobile screens
           orderIndependentTranslucency: false,
           contextOptions: {
             webgl: {
               preserveDrawingBuffer: true, // Crucial for snapshot and canvas recording
+              alpha: false,
+              antialias: true,
             },
           },
         });
 
-        // Add user-selected Imagery Basemap Layer
+        // Set device resolution scale for high-DPI (Retina, 4K, Mobile, Tablet) crystal clarity
+        const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+        viewer.resolutionScale = Math.min(Math.max(dpr, 1.0), 2.0);
+
+        // Add user-selected Imagery Basemap Layer with Ultra HD filtering
         const initialProvider = getProvider(baseMap);
         if (initialProvider) {
-          currentLayerRef.current = viewer.imageryLayers.addImageryProvider(initialProvider);
+          const layer = viewer.imageryLayers.addImageryProvider(initialProvider);
+          if (typeof Cesium.TextureMinificationFilter !== 'undefined') {
+            layer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR;
+            layer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
+          }
+          currentLayerRef.current = layer;
         }
 
-        // Optimize visual scene
+        // Optimize visual scene & Maximize imagery clarity
         viewer.scene.globe.show = true;
         viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0f172a');
         viewer.scene.globe.depthTestAgainstTerrain = false;
         viewer.scene.globe.enableLighting = false; // Prevents pitch black night side shadow
         viewer.scene.skyAtmosphere.show = true;
+
+        // Force Cesium to load higher-resolution tiles sooner (Lower screen space error = crisper textures)
+        viewer.scene.globe.maximumScreenSpaceError = 1.25; // Default is 2.0 (1.25 requests higher zoom levels earlier)
+        viewer.scene.globe.tileCacheSize = 400; // Cache more HD tiles in GPU/RAM
+        viewer.scene.globe.loadingDescendantLimit = 32;
+        viewer.scene.globe.preloadAncestors = true;
+        viewer.scene.globe.preloadSiblings = true;
 
         // Default parcel center (Bursa)
         parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(28.981, 40.224);
@@ -618,6 +646,47 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
         viewerRef.current = viewer;
         setIsCesiumReady(true);
+
+        // Device GPS Geolocation as default initial location on phones and tablets
+        if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const { longitude, latitude } = pos.coords;
+              deviceLocationCoordsRef.current = { lng: longitude, lat: latitude };
+              setGpsToastMessage(`📍 Cihaz Konumu Algılandı (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+              setShowGpsToast(true);
+              setTimeout(() => setShowGpsToast(false), 4500);
+
+              if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+                const userCartesian = Cesium.Cartesian3.fromDegrees(longitude, latitude);
+                parcelCenterRef.current = userCartesian;
+                viewerRef.current.camera.flyTo({
+                  destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1200),
+                  orientation: {
+                    heading: Cesium.Math.toRadians(headingRef.current),
+                    pitch: Cesium.Math.toRadians(pitchRef.current),
+                    roll: 0,
+                  },
+                  duration: 2.2,
+                  complete: () => {
+                    updateCameraView();
+                  },
+                });
+              }
+            },
+            (err) => {
+              console.warn('Cihaz konumu alınamadı (varsayılan parsel merkezi kullanılıyor):', err.message);
+              setTimeout(() => {
+                centerOnParcel(1.2);
+              }, 400);
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+          );
+        } else {
+          setTimeout(() => {
+            centerOnParcel(1.2);
+          }, 400);
+        }
 
         // Background Asynchronous 3D Terrain Loader (Doesn't block Earth display)
         (async () => {
@@ -706,7 +775,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       const newProvider = getProvider(baseMap);
       if (newProvider) {
         viewer.imageryLayers.removeAll();
-        currentLayerRef.current = viewer.imageryLayers.addImageryProvider(newProvider);
+        const layer = viewer.imageryLayers.addImageryProvider(newProvider);
+        if (typeof Cesium.TextureMinificationFilter !== 'undefined') {
+          layer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR;
+          layer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
+        }
+        currentLayerRef.current = layer;
       }
     } catch (e) {
       console.error('Basemap switch error:', e);
@@ -1028,6 +1102,54 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     centerOnParcel(1.5);
   }, [centerOnParcel]);
 
+  const flyToDeviceLocation = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || typeof Cesium === 'undefined') return;
+
+    if (deviceLocationCoordsRef.current) {
+      const { lng, lat } = deviceLocationCoordsRef.current;
+      parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(lng, lat);
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 1200),
+        orientation: {
+          heading: Cesium.Math.toRadians(headingRef.current),
+          pitch: Cesium.Math.toRadians(pitchRef.current),
+          roll: 0,
+        },
+        duration: 1.6,
+        complete: () => updateCameraView(),
+      });
+      setGpsToastMessage(`📍 Cihaz Konumuna Yakınlaşıldı (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+      setShowGpsToast(true);
+      setTimeout(() => setShowGpsToast(false), 3500);
+    } else if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { longitude, latitude } = pos.coords;
+          deviceLocationCoordsRef.current = { lng: longitude, lat: latitude };
+          parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(longitude, latitude);
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1200),
+            orientation: {
+              heading: Cesium.Math.toRadians(headingRef.current),
+              pitch: Cesium.Math.toRadians(pitchRef.current),
+              roll: 0,
+            },
+            duration: 1.6,
+            complete: () => updateCameraView(),
+          });
+          setGpsToastMessage(`📍 Cihaz Konumu Algılandı (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+          setShowGpsToast(true);
+          setTimeout(() => setShowGpsToast(false), 3500);
+        },
+        (err) => {
+          alert('Cihaz konumu alınamadı. Lütfen cihazınızın konum servisini ve tarayıcı iznini kontrol ediniz.');
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, [updateCameraView]);
+
   // Expose Viewer methods to parent
   useEffect(() => {
     if (onViewerReady) {
@@ -1037,9 +1159,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         stopVideoRecording,
         isRecording,
         flyToParcel,
+        flyToDeviceLocation,
       });
     }
-  }, [onViewerReady, takeSnapshot, startVideoRecording, stopVideoRecording, isRecording, flyToParcel]);
+  }, [onViewerReady, takeSnapshot, startVideoRecording, stopVideoRecording, isRecording, flyToParcel, flyToDeviceLocation]);
 
   // Aspect ratio classes for container
   const getFormatClasses = () => {
@@ -1098,8 +1221,26 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           </div>
         )}
 
-        {/* Quick 3D Terrain Kabartma Aktif / Pasif Toggle Button */}
+        {/* GPS Location Notification Toast */}
+        {showGpsToast && (
+          <div className="absolute top-16 sm:top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950/90 backdrop-blur-xl border border-sky-400/40 text-sky-300 shadow-2xl text-xs font-semibold animate-in fade-in slide-in-from-top-3 duration-300">
+            <LocateFixed className="w-4 h-4 text-sky-400 animate-spin" />
+            <span>{gpsToastMessage}</span>
+          </div>
+        )}
+
+        {/* Quick 3D Terrain Kabartma Aktif / Pasif Toggle Button & GPS Button */}
         <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
+          {/* GPS Konumuma Git Butonu */}
+          <button
+            onClick={flyToDeviceLocation}
+            className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl backdrop-blur-md bg-slate-950/80 hover:bg-slate-900 border border-white/20 hover:border-sky-400/60 text-sky-400 hover:text-sky-300 flex items-center gap-1.5 text-xs font-semibold shadow-xl transition active:scale-95 cursor-pointer"
+            title="Cihazımın GPS Konumuna Git"
+          >
+            <LocateFixed className="w-4 h-4" />
+            <span className="hidden sm:inline">Konumum</span>
+          </button>
+
           <button
             onClick={onToggleTerrain}
             className={`px-3 py-1.5 rounded-xl backdrop-blur-md border flex items-center gap-2 text-xs font-semibold shadow-xl transition cursor-pointer ${

@@ -13,6 +13,8 @@ import {
   Palette,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
+  ChevronLeft,
   Sliders,
   Camera as CameraIcon,
   Video as VideoIcon,
@@ -27,6 +29,10 @@ import {
   Rotate3d,
   Mountain,
   Navigation,
+  LocateFixed,
+  X,
+  Menu,
+  Map,
 } from 'lucide-react';
 import {
   BaseMapType,
@@ -171,6 +177,26 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   return (
     <>
+      {/* Left Tab Handle: Visible when panel is collapsed (ideal for phone & tablet) */}
+      {isCollapsed && (
+        <button
+          onClick={() => setIsCollapsed(false)}
+          className="fixed left-0 top-16 sm:top-20 z-40 flex items-center gap-2 pl-3 pr-3.5 py-2.5 rounded-r-2xl bg-slate-950/95 hover:bg-slate-900 backdrop-blur-2xl border-y border-r border-sky-400/40 shadow-2xl shadow-black text-white active:scale-95 transition group cursor-pointer animate-in fade-in slide-in-from-left-4 duration-300"
+          title="3D Parsel Studio Menüsünü Aç"
+        >
+          <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/50 flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-slate-950 transition">
+            <Compass className="w-4 h-4" />
+          </div>
+          <div className="flex flex-col items-start text-left">
+            <span className="text-[11px] font-bold text-white tracking-wide uppercase flex items-center gap-1">
+              3D Parsel Studio
+              <ChevronRight className="w-3.5 h-3.5 text-sky-400 group-hover:translate-x-0.5 transition" />
+            </span>
+            <span className="text-[9px] text-slate-400 font-mono">Araçlar & Ayarlar</span>
+          </div>
+        </button>
+      )}
+
       {/* Mobile Floating Action Dock (Visible only on mobile when panel is collapsed) */}
       {isCollapsed && (
         <div className="sm:hidden fixed bottom-4 inset-x-3 z-40 flex items-center justify-between p-2 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black">
@@ -179,10 +205,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             className="h-11 px-3.5 rounded-xl bg-sky-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition"
           >
             <Sliders className="w-4 h-4" />
-            <span>Stüdyo Menüsü</span>
+            <span>Stüdyo</span>
           </button>
 
           <div className="flex items-center gap-1.5">
+            {/* GPS Konum Butonu */}
+            <button
+              onClick={() => viewerMethods?.flyToDeviceLocation()}
+              className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-sky-400 flex items-center justify-center active:scale-95 transition"
+              title="Konumuma Git (GPS)"
+            >
+              <LocateFixed className="w-4 h-4" />
+            </button>
+
             <button
               onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
               className={`w-11 h-11 rounded-xl border flex items-center justify-center transition active:scale-95 ${
@@ -227,24 +262,24 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       )}
 
-      {/* Main Studio Control Panel: Mobile Bottom Sheet / Desktop Floating Glass Card */}
-      <div
-        className={`${
-          isCollapsed ? 'hidden sm:block' : 'fixed sm:absolute'
-        } inset-x-0 bottom-0 sm:bottom-auto sm:top-5 sm:left-5 z-40 sm:max-w-[370px] w-full sm:w-[370px] select-none`}
-      >
-        <div className="rounded-t-3xl sm:rounded-2xl bg-slate-950/95 sm:bg-slate-950/90 backdrop-blur-2xl border-t sm:border border-white/15 shadow-2xl shadow-black/90 overflow-hidden flex flex-col max-h-[82vh] sm:max-h-[calc(100vh-40px)] transition-all duration-200">
-          
-          {/* Mobile Drag Indicator Handle */}
-          <div
-            className="sm:hidden pt-2.5 pb-1 flex justify-center cursor-pointer"
-            onClick={() => setIsCollapsed(true)}
-          >
-            <div className="w-12 h-1.5 rounded-full bg-white/25 hover:bg-white/40" />
-          </div>
+      {/* Backdrop for Mobile & Tablet when Drawer is open */}
+      {!isCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 transition-opacity"
+          onClick={() => setIsCollapsed(true)}
+        />
+      )}
 
+      {/* Main Studio Control Panel: Left Sliding Drawer for Phone, Tablet & Desktop */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-[90vw] sm:w-[385px] max-w-[420px] h-full flex flex-col bg-slate-950/95 backdrop-blur-2xl border-r border-white/15 shadow-2xl shadow-black transition-transform duration-300 ease-out select-none ${
+          isCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
+        }`}
+      >
+        <div className="flex flex-col h-full overflow-hidden">
+          
           {/* Header Bar */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-slate-900/60">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-slate-900/80 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0">
                 <Compass className="w-4 h-4" />
@@ -265,232 +300,256 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 </span>
               )}
               
-              {/* Haritayı Gör / Kapat Button on Mobile */}
+              {/* Haritayı Gör / Kapat Button */}
               <button
                 onClick={() => setIsCollapsed(true)}
-                className="sm:hidden min-h-[38px] px-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-medium flex items-center gap-1"
+                className="h-8 px-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-medium flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                title="Paneli Kapat ve Haritayı Gör"
               >
                 <span>Haritayı Gör</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-
-              {/* Desktop Collapse Toggle */}
-              <button
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="hidden sm:flex min-w-[36px] min-h-[36px] items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
-                title={isCollapsed ? 'Paneli Genişlet' : 'Paneli Daralt'}
-              >
-                {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                <ChevronLeft className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* Navigation Tabs with comfortable touch targets */}
-          {!isCollapsed && (
-            <div className="flex items-center border-b border-white/10 bg-slate-950/60 p-1.5 gap-1 overflow-x-auto scrollbar-none">
-              <button
-                onClick={() => setActiveTab('map')}
-                className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'map'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Harita</span>
-              </button>
+          <div className="flex items-center border-b border-white/10 bg-slate-950/80 p-1.5 gap-1 overflow-x-auto scrollbar-none shrink-0">
+            <button
+              onClick={() => setActiveTab('map')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'map'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Harita</span>
+            </button>
 
-              <button
-                onClick={() => setActiveTab('camera')}
-                className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'camera'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <RotateCw className="w-3.5 h-3.5" />
-                <span>3D Tur</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('camera')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'camera'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>3D Tur</span>
+            </button>
 
-              <button
-                onClick={() => setActiveTab('parcel')}
-                className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'parcel'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Parsel</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('parcel')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'parcel'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Parsel</span>
+            </button>
 
-              <button
-                onClick={() => setActiveTab('style')}
-                className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'style'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <Palette className="w-3.5 h-3.5" />
-                <span>Stil</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('style')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'style'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>Stil</span>
+            </button>
 
-              <button
-                onClick={() => setActiveTab('watermark')}
-                className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'watermark'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <Building className="w-3.5 h-3.5" />
-                <span>Firma</span>
-              </button>
+            <button
+              onClick={() => setActiveTab('watermark')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'watermark'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              <span>Firma</span>
+            </button>
 
-              <button
-                onClick={() => setActiveTab('export')}
-                className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition ${
-                  activeTab === 'export'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <VideoIcon className="w-3.5 h-3.5" />
-                <span>Kayıt</span>
-              </button>
-            </div>
-          )}
+            <button
+              onClick={() => setActiveTab('export')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'export'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <VideoIcon className="w-3.5 h-3.5" />
+              <span>Kayıt</span>
+            </button>
+          </div>
 
           {/* Tab Contents - Scrollable with comfortable touch padding */}
-          {!isCollapsed && (
-            <div className="p-4 max-h-[calc(82vh-130px)] sm:max-h-[calc(100vh-210px)] overflow-y-auto overscroll-contain space-y-4 text-xs">
-              
-              {/* TAB 1: HARİTA & KADRAJ */}
-              {activeTab === 'map' && (
-                <div className="space-y-4">
-                  {/* Altlık Harita Seçenekleri */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">
-                        Altlık Harita Katmanı
-                      </label>
-                      <span className="text-[10px] text-slate-400 font-mono">4 Güvenilir Altlık</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onBaseMapChange('google_hybrid')}
-                        className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                          baseMap === 'google_hybrid'
-                            ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            baseMap === 'google_hybrid' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
-                          }`}
-                        >
-                          <Globe className="w-4 h-4" />
-                        </div>
-                        <div className="text-left overflow-hidden">
-                          <div className="text-xs font-bold leading-tight">Google Hibrit</div>
-                          <div
-                            className={`text-[10px] leading-tight truncate ${
-                              baseMap === 'google_hybrid' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                            }`}
-                          >
-                            Uydu + Yol & İsimler
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onBaseMapChange('google_satellite')}
-                        className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                          baseMap === 'google_satellite'
-                            ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            baseMap === 'google_satellite' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
-                          }`}
-                        >
-                          <Sparkles className="w-4 h-4" />
-                        </div>
-                        <div className="text-left overflow-hidden">
-                          <div className="text-xs font-bold leading-tight">Google Saf Uydu</div>
-                          <div
-                            className={`text-[10px] leading-tight truncate ${
-                              baseMap === 'google_satellite' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                            }`}
-                          >
-                            Yazısız Net Uydu
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onBaseMapChange('esri')}
-                        className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                          baseMap === 'esri'
-                            ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            baseMap === 'esri' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
-                          }`}
-                        >
-                          <Layers className="w-4 h-4" />
-                        </div>
-                        <div className="text-left overflow-hidden">
-                          <div className="text-xs font-bold leading-tight">Esri Dünya Uydu</div>
-                          <div
-                            className={`text-[10px] leading-tight truncate ${
-                              baseMap === 'esri' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                            }`}
-                          >
-                            ArcGIS Yüksek Uydu
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onBaseMapChange('carto_voyager')}
-                        className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                          baseMap === 'carto_voyager'
-                            ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            baseMap === 'carto_voyager' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
-                          }`}
-                        >
-                          <Navigation className="w-4 h-4" />
-                        </div>
-                        <div className="text-left overflow-hidden">
-                          <div className="text-xs font-bold leading-tight">Carto Voyager</div>
-                          <div
-                            className={`text-[10px] leading-tight truncate ${
-                              baseMap === 'carto_voyager' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                            }`}
-                          >
-                            Yol & Şehir Haritası
-                          </div>
-                        </div>
-                      </button>
-                    </div>
+          <div className="flex-1 p-4 overflow-y-auto overscroll-contain space-y-4 text-xs">
+            
+            {/* TAB 1: HARİTA & KADRAJ */}
+            {activeTab === 'map' && (
+              <div className="space-y-4">
+                {/* Altlık Harita Seçenekleri: Google Hibrit, Google Saf, Yandex Hibrit, Yandex Saf */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">
+                      Altlık Harita Katmanı
+                    </label>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      ⚡ Ultra HD (512px)
+                    </span>
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Google Hibrit */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('google_hybrid')}
+                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
+                        baseMap === 'google_hybrid'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          baseMap === 'google_hybrid' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
+                        }`}
+                      >
+                        <Globe className="w-4 h-4" />
+                      </div>
+                      <div className="text-left overflow-hidden">
+                        <div className="text-xs font-bold leading-tight flex items-center gap-1">
+                          <span>Google Hibrit</span>
+                          <span className={`text-[8px] px-1 py-0.2 rounded font-black ${
+                            baseMap === 'google_hybrid' ? 'bg-slate-950 text-sky-300' : 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
+                          }`}>HD</span>
+                        </div>
+                        <div
+                          className={`text-[10px] leading-tight truncate ${
+                            baseMap === 'google_hybrid' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
+                          }`}
+                        >
+                          512px Uydu + Yol & İsimler
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Google Saf */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('google_satellite')}
+                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
+                        baseMap === 'google_satellite'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          baseMap === 'google_satellite' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
+                        }`}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div className="text-left overflow-hidden">
+                        <div className="text-xs font-bold leading-tight flex items-center gap-1">
+                          <span>Google Saf</span>
+                          <span className={`text-[8px] px-1 py-0.2 rounded font-black ${
+                            baseMap === 'google_satellite' ? 'bg-slate-950 text-sky-300' : 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
+                          }`}>HD</span>
+                        </div>
+                        <div
+                          className={`text-[10px] leading-tight truncate ${
+                            baseMap === 'google_satellite' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
+                          }`}
+                        >
+                          512px Saf Net Uydu
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Yandex Hibrit */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('yandex_hybrid')}
+                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
+                        baseMap === 'yandex_hybrid'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          baseMap === 'yandex_hybrid' ? 'bg-slate-950/20 text-slate-950' : 'bg-amber-500/20 text-amber-400'
+                        }`}
+                      >
+                        <Map className="w-4 h-4" />
+                      </div>
+                      <div className="text-left overflow-hidden">
+                        <div className="text-xs font-bold leading-tight">Yandex Hibrit</div>
+                        <div
+                          className={`text-[10px] leading-tight truncate ${
+                            baseMap === 'yandex_hybrid' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
+                          }`}
+                        >
+                          Yol & Yer İsimleri
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Yandex Saf */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('yandex_satellite')}
+                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
+                        baseMap === 'yandex_satellite'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          baseMap === 'yandex_satellite' ? 'bg-slate-950/20 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div className="text-left overflow-hidden">
+                        <div className="text-xs font-bold leading-tight">Yandex Saf</div>
+                        <div
+                          className={`text-[10px] leading-tight truncate ${
+                            baseMap === 'yandex_satellite' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
+                          }`}
+                        >
+                          Saf Yandex Net Uydu
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* HD Çözünürlük Bilgi Notu */}
+                  <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-sky-950/40 border border-sky-400/20 flex items-center justify-between text-[10px] text-sky-300">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      Ultra HD (Retina/512px) Çözünürlük Aktif
+                    </span>
+                    <span className="font-mono text-[9px] text-sky-400/80">Zoom 22 Max</span>
+                  </div>
+
+                  {/* GPS Konumuma Odaklan Butonu */}
+                  <button
+                    type="button"
+                    onClick={() => viewerMethods?.flyToDeviceLocation()}
+                    className="w-full mt-2.5 p-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 text-sky-300 font-semibold flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer shadow-lg"
+                  >
+                    <LocateFixed className="w-4 h-4 text-sky-400" />
+                    <span>📍 Telefon / Tablet GPS Konumuna Git</span>
+                  </button>
+                </div>
 
                   {/* 3D Arazi & Gerçekçi Kabartma Aktif / Pasif */}
                   <div
@@ -1294,10 +1353,59 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             )}
 
           </div>
-        )}
 
+          {/* Sticky Drawer Footer Actions for Phone, Tablet & Desktop */}
+          <div className="p-3 border-t border-white/10 bg-slate-900/95 shrink-0 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => viewerMethods?.takeSnapshot()}
+              className="flex-1 h-9 px-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+              title="HD Fotoğraf Çek"
+            >
+              <CameraIcon className="w-3.5 h-3.5 text-sky-400" />
+              <span>HD Foto</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
+              className={`flex-1 h-9 px-2.5 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer ${
+                cameraState.isTouring
+                  ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-md shadow-red-500/30'
+                  : 'bg-white/10 text-sky-400 border-white/15 hover:bg-white/15'
+              }`}
+              title="3D Kamera Turu"
+            >
+              <Rotate3d className={`w-3.5 h-3.5 ${cameraState.isTouring ? 'animate-spin' : ''}`} />
+              <span>{cameraState.isTouring ? 'Durdur' : '3D Tur'}</span>
+            </button>
+
+            {viewerMethods?.isRecording ? (
+              <button
+                type="button"
+                onClick={() => viewerMethods.stopVideoRecording()}
+                className="flex-1 h-9 px-2.5 rounded-xl bg-red-600 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-lg shadow-red-600/40 animate-pulse active:scale-95 cursor-pointer"
+              >
+                <Square className="w-3 h-3 fill-white" />
+                <span>Durdur</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!cameraState.isTouring) onCameraChange({ isTouring: true });
+                  viewerMethods?.startVideoRecording();
+                }}
+                className="flex-1 h-9 px-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-red-500/20 active:scale-95 cursor-pointer"
+              >
+                <VideoIcon className="w-3.5 h-3.5" />
+                <span>Video</span>
+              </button>
+            )}
+          </div>
+
+        </div>
       </div>
-    </div>
     </>
   );
 };
