@@ -1,28 +1,85 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="75%">
-      <stop offset="0%" stop-color="#0e172a" />
-      <stop offset="100%" stop-color="#020617" />
-    </radialGradient>
-    <linearGradient id="parcelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#0ea5e9" />
-      <stop offset="100%" stop-color="#10b981" />
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#040711"/>
+      <stop offset="100%" stop-color="#02040a"/>
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+
+    <linearGradient id="parcelTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#0369a1" stop-opacity="0.55"/>
+    </linearGradient>
+
+    <linearGradient id="parcelSideL" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0369a1" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#082f49" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <linearGradient id="parcelSideR" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#0c4a6e" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <linearGradient id="accentGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="104" fill="url(#bgGrad)" />
-  <!-- Isometric 3D Base -->
-  <polygon points="256,410 420,310 420,335 256,435 92,335 92,310" fill="#0369a1" opacity="0.6" />
-  <!-- 3D Parcel Polygon -->
-  <polygon points="256,100 420,225 256,350 92,225" fill="url(#parcelGrad)" fill-opacity="0.35" stroke="#38bdf8" stroke-width="12" filter="url(#glow)" />
-  <!-- Dynamic Inner Terrain Flow Lines -->
-  <path d="M 174,162 L 338,287" stroke="#7dd3fc" stroke-width="4" stroke-dasharray="8 8" opacity="0.7" />
-  <path d="M 338,162 L 174,287" stroke="#6ee7b7" stroke-width="4" stroke-dasharray="8 8" opacity="0.7" />
-  <!-- Center 3D Location Pin -->
-  <circle cx="256" cy="225" r="14" fill="#ffffff" filter="url(#glow)" />
-  <circle cx="256" cy="225" r="7" fill="#0284c7" />
+
+  <!-- App Background Tile -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#38bdf8" stroke-opacity="0.2" stroke-width="2"/>
+
+  <!-- Subtle Perspective Grid Lines -->
+  <g opacity="0.18" stroke="#38bdf8" stroke-width="1.5">
+    <line x1="96" y1="360" x2="416" y2="360"/>
+    <line x1="140" y1="400" x2="372" y2="400"/>
+    <line x1="180" y1="436" x2="332" y2="436"/>
+    <line x1="256" y1="200" x2="120" y2="440"/>
+    <line x1="256" y1="200" x2="392" y2="440"/>
+    <line x1="256" y1="200" x2="256" y2="450"/>
+  </g>
+
+  <!-- 3D Extruded Cadastral Parcel Block -->
+  <g transform="translate(0, -10)">
+    <!-- 3D Extruded Sides (Depth) -->
+    <!-- Front-Left Wall -->
+    <polygon points="120,246 256,316 256,366 120,296" fill="url(#parcelSideL)" stroke="#0284c7" stroke-width="1.5" stroke-linejoin="round"/>
+    
+    <!-- Front-Right Wall -->
+    <polygon points="256,316 392,246 392,296 256,366" fill="url(#parcelSideR)" stroke="#38bdf8" stroke-width="1.5" stroke-linejoin="round"/>
+
+    <!-- Back Wall Shadow Accent -->
+    <polygon points="256,150 120,246 120,266 256,170" fill="#082f49" opacity="0.4"/>
+
+    <!-- Parcel Top Facet (Plot Surface) -->
+    <polygon points="256,150 392,246 256,316 120,246" fill="url(#parcelTop)" stroke="url(#accentGlow)" stroke-width="6" stroke-linejoin="round" filter="url(#neonGlow)"/>
+
+    <!-- Internal Cadastral Boundary Overlay -->
+    <polygon points="256,174 366,246 256,298 146,246" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="6,4" stroke-opacity="0.7"/>
+
+    <!-- Surveyor Corner Pins (Nodes) -->
+    <circle cx="256" cy="150" r="8" fill="#38bdf8" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="392" cy="246" r="8" fill="#38bdf8" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="256" cy="316" r="8" fill="#38bdf8" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="120" cy="246" r="8" fill="#38bdf8" stroke="#ffffff" stroke-width="3"/>
+
+    <!-- 3D Center Compass / Drone Target Marker -->
+    <g transform="translate(256, 233)">
+      <circle cx="0" cy="0" r="22" fill="#0284c7" fill-opacity="0.35" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4,3"/>
+      <circle cx="0" cy="0" r="8" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+      <!-- North Pointer -->
+      <polygon points="0,-24 -5,-10 5,-10" fill="#ef4444"/>
+      <polygon points="0,24 -5,10 5,10" fill="#94a3b8"/>
+    </g>
+  </g>
 </svg>

@@ -84,7 +84,7 @@ function renderWatermarkToCanvas(
 
   // Location display string
   const locParts = [parcel?.city, parcel?.district, parcel?.neighborhood].filter(Boolean);
-  const locationTitle = locParts.length > 0 ? locParts.join(' / ') : 'Türkiye Kadastro Parseli';
+  const locationTitle = locParts.length > 0 ? locParts.join(' / ') : '3D Küresel Uydu Haritası';
 
   // Ada / Parsel display string
   let adaParselText = '';
@@ -385,10 +385,50 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const [showGpsToast, setShowGpsToast] = useState(false);
   const [gpsToastMessage, setGpsToastMessage] = useState('📍 Konumunuz Algılandı');
   const deviceLocationCoordsRef = useRef<{ lng: number; lat: number } | null>(null);
+  const userLocationEntityRef = useRef<any>(null);
+
+  // Helper to place/update current user location marker pin on Cesium globe
+  const updateUserLocationMarker = useCallback((lng: number, lat: number, label = 'Mevcut Konumunuz') => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
+
+    if (userLocationEntityRef.current) {
+      viewer.entities.remove(userLocationEntityRef.current);
+      userLocationEntityRef.current = null;
+    }
+
+    userLocationEntityRef.current = viewer.entities.add({
+      name: label,
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, 2),
+      point: {
+        pixelSize: 15,
+        color: Cesium.Color.fromCssColorString('#009EB5'),
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 3,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: `📍 ${label}`,
+        font: 'bold 12px "Plus Jakarta Sans", system-ui, sans-serif',
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.fromCssColorString('#020617'),
+        outlineWidth: 4,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -16),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+  }, []);
 
   // Sync refs
   useEffect(() => {
     isTouringRef.current = cameraState.isTouring;
+    if (!cameraState.isTouring && viewerRef.current && typeof Cesium !== 'undefined') {
+      try {
+        viewerRef.current.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      } catch (e) {}
+    }
   }, [cameraState.isTouring]);
 
   useEffect(() => {
@@ -419,19 +459,17 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [watermarkConfig.logoUrl]);
 
-  // Provider selector with Ultra HD resolution settings
+  // Provider selector
   const getProvider = useCallback((type: BaseMapType) => {
     if (typeof Cesium === 'undefined') return null;
 
     try {
       if (type === 'google_satellite') {
         const p = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://mt{s}.google.com/vt/lyrs=s&scale=2&x={x}&y={y}&z={z}',
+          url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
           subdomains: ['0', '1', '2', '3'],
-          tileWidth: 512,
-          tileHeight: 512,
-          maximumLevel: 22,
-          credit: 'Google Saf Uydu HD',
+          maximumLevel: 21,
+          credit: 'Google Saf Uydu',
         });
         p.errorEvent?.addEventListener((err: any) => console.warn('Google Satellite tile error:', err));
         return p;
@@ -441,8 +479,8 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const p = new Cesium.UrlTemplateImageryProvider({
           url: 'https://sat0{s}.maps.yandex.net/tiles?l=sat,skl&x={x}&y={y}&z={z}&lang=tr_TR',
           subdomains: ['1', '2', '3', '4'],
-          maximumLevel: 20,
-          credit: 'Yandex Hibrit Uydu HD',
+          maximumLevel: 19,
+          credit: 'Yandex Hibrit Uydu',
         });
         p.errorEvent?.addEventListener((err: any) => console.warn('Yandex Hybrid tile error:', err));
         return p;
@@ -452,21 +490,19 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const p = new Cesium.UrlTemplateImageryProvider({
           url: 'https://sat0{s}.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}&lang=tr_TR',
           subdomains: ['1', '2', '3', '4'],
-          maximumLevel: 20,
-          credit: 'Yandex Saf Uydu HD',
+          maximumLevel: 19,
+          credit: 'Yandex Saf Uydu',
         });
         p.errorEvent?.addEventListener((err: any) => console.warn('Yandex Satellite tile error:', err));
         return p;
       }
 
-      // Default: Google Hybrid Satellite + Roads & Kadastro Names in Ultra HD (scale=2, 512x512, zoom 22)
+      // Default: Google Hybrid Satellite + Roads & Kadastro Names (High resolution, Turkish labels)
       const p = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://mt{s}.google.com/vt/lyrs=y&hl=tr&scale=2&x={x}&y={y}&z={z}',
+        url: 'https://mt{s}.google.com/vt/lyrs=y&hl=tr&x={x}&y={y}&z={z}',
         subdomains: ['0', '1', '2', '3'],
-        tileWidth: 512,
-        tileHeight: 512,
-        maximumLevel: 22,
-        credit: 'Google Hibrit Uydu HD',
+        maximumLevel: 21,
+        credit: 'Google Hibrit Uydu',
       });
       p.errorEvent?.addEventListener((err: any) => console.warn('Google Hybrid tile error:', err));
       return p;
@@ -493,6 +529,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           rangeRef.current
         )
       );
+      // Unlock camera transform unless continuous tour is actively orbiting
+      if (!isTouringRef.current) {
+        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      }
     } catch (e) {
       console.warn('Camera update warning:', e);
     }
@@ -548,15 +588,19 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             optimalRange
           ),
           complete: () => {
-            updateCameraView();
+            try {
+              viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+            } catch (e) {}
           },
         });
       } catch (e) {
         console.warn('centerOnParcel error:', e);
-        updateCameraView();
+        try {
+          viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        } catch (ignored) {}
       }
     },
-    [activeParcel, isTerrainActive, onCameraChange, updateCameraView]
+    [activeParcel, isTerrainActive, onCameraChange]
   );
 
   // Initialize Cesium
@@ -604,15 +648,19 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
         viewer.resolutionScale = Math.min(Math.max(dpr, 1.0), 2.0);
 
-        // Add user-selected Imagery Basemap Layer with Ultra HD filtering
+        // Ensure touch and gesture controls are active on mobile devices (Android & iOS)
+        if (viewer.scene.screenSpaceCameraController) {
+          viewer.scene.screenSpaceCameraController.enableRotate = true;
+          viewer.scene.screenSpaceCameraController.enableTranslate = true;
+          viewer.scene.screenSpaceCameraController.enableZoom = true;
+          viewer.scene.screenSpaceCameraController.enableTilt = true;
+          viewer.scene.screenSpaceCameraController.enableLook = true;
+        }
+
+        // Add user-selected Imagery Basemap Layer
         const initialProvider = getProvider(baseMap);
         if (initialProvider) {
-          const layer = viewer.imageryLayers.addImageryProvider(initialProvider);
-          if (typeof Cesium.TextureMinificationFilter !== 'undefined') {
-            layer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR;
-            layer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
-          }
-          currentLayerRef.current = layer;
+          currentLayerRef.current = viewer.imageryLayers.addImageryProvider(initialProvider);
         }
 
         // Optimize visual scene & Maximize imagery clarity
@@ -629,8 +677,22 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         viewer.scene.globe.preloadAncestors = true;
         viewer.scene.globe.preloadSiblings = true;
 
-        // Default parcel center (Bursa)
-        parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(28.981, 40.224);
+        // Set initial orbital camera view to display the global 3D Earth (Dünya Küresi) in space
+        const initialEarthCenter = Cesium.Cartesian3.fromDegrees(35.0, 39.0, 0);
+        parcelCenterRef.current = initialEarthCenter;
+
+        try {
+          viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        } catch (e) {}
+
+        viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(35.0, 39.0, 18500000),
+          orientation: {
+            heading: Cesium.Math.toRadians(0),
+            pitch: Cesium.Math.toRadians(-89.9),
+            roll: 0,
+          },
+        });
 
         // Setup clock tick listener for continuous cinematic 3D tour
         const onTick = () => {
@@ -647,47 +709,6 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         viewerRef.current = viewer;
         setIsCesiumReady(true);
 
-        // Device GPS Geolocation as default initial location on phones and tablets
-        if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const { longitude, latitude } = pos.coords;
-              deviceLocationCoordsRef.current = { lng: longitude, lat: latitude };
-              setGpsToastMessage(`📍 Cihaz Konumu Algılandı (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-              setShowGpsToast(true);
-              setTimeout(() => setShowGpsToast(false), 4500);
-
-              if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-                const userCartesian = Cesium.Cartesian3.fromDegrees(longitude, latitude);
-                parcelCenterRef.current = userCartesian;
-                viewerRef.current.camera.flyTo({
-                  destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1200),
-                  orientation: {
-                    heading: Cesium.Math.toRadians(headingRef.current),
-                    pitch: Cesium.Math.toRadians(pitchRef.current),
-                    roll: 0,
-                  },
-                  duration: 2.2,
-                  complete: () => {
-                    updateCameraView();
-                  },
-                });
-              }
-            },
-            (err) => {
-              console.warn('Cihaz konumu alınamadı (varsayılan parsel merkezi kullanılıyor):', err.message);
-              setTimeout(() => {
-                centerOnParcel(1.2);
-              }, 400);
-            },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-          );
-        } else {
-          setTimeout(() => {
-            centerOnParcel(1.2);
-          }, 400);
-        }
-
         // Background Asynchronous 3D Terrain Loader (Doesn't block Earth display)
         (async () => {
           try {
@@ -700,10 +721,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 viewerRef.current.terrainProvider = terrain;
                 viewerRef.current.scene.globe.depthTestAgainstTerrain = true;
                 viewerRef.current.scene.globe.terrainExaggeration = 1.8;
-                // 3D arazi aktifleştiğinde yüklenen parseli otomatik tam ortala
-                setTimeout(() => {
-                  centerOnParcel(1.2);
-                }, 350);
+                // Sadece aktif parsel varsa parseli ortala
+                if (activeParcel && activeParcel.coordinates.length >= 3) {
+                  setTimeout(() => {
+                    centerOnParcel(1.2);
+                  }, 350);
+                }
               }
             }
           } catch (terrainErr) {
@@ -775,12 +798,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       const newProvider = getProvider(baseMap);
       if (newProvider) {
         viewer.imageryLayers.removeAll();
-        const layer = viewer.imageryLayers.addImageryProvider(newProvider);
-        if (typeof Cesium.TextureMinificationFilter !== 'undefined') {
-          layer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR;
-          layer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
-        }
-        currentLayerRef.current = layer;
+        currentLayerRef.current = viewer.imageryLayers.addImageryProvider(newProvider);
       }
     } catch (e) {
       console.error('Basemap switch error:', e);
@@ -1106,49 +1124,117 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     const viewer = viewerRef.current;
     if (!viewer || typeof Cesium === 'undefined') return;
 
-    if (deviceLocationCoordsRef.current) {
-      const { lng, lat } = deviceLocationCoordsRef.current;
+    setGpsToastMessage('🔍 Konumunuz Alınıyor...');
+    setShowGpsToast(true);
+
+    const onLocationResolved = (
+      lng: number,
+      lat: number,
+      label = 'Mevcut Konumunuz',
+      altitude = 850,
+      toast = '📍 Konumunuz Bulundu'
+    ) => {
+      deviceLocationCoordsRef.current = { lng, lat };
+      try {
+        localStorage.setItem(
+          'parsel_last_device_pos',
+          JSON.stringify({ lng, lat, label, timestamp: Date.now() })
+        );
+      } catch (e) {}
+
       parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(lng, lat);
+      updateUserLocationMarker(lng, lat, label);
+
+      // Unlock camera transform so touch gesture panning works smoothly on mobile
+      try {
+        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      } catch (e) {}
+
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lng, lat, 1200),
+        destination: Cesium.Cartesian3.fromDegrees(lng, lat, altitude),
         orientation: {
-          heading: Cesium.Math.toRadians(headingRef.current),
-          pitch: Cesium.Math.toRadians(pitchRef.current),
+          heading: Cesium.Math.toRadians(headingRef.current || 0),
+          pitch: Cesium.Math.toRadians(pitchRef.current || -45),
           roll: 0,
         },
         duration: 1.6,
-        complete: () => updateCameraView(),
+        complete: () => {
+          try {
+            viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+          } catch (e) {}
+        },
       });
-      setGpsToastMessage(`📍 Cihaz Konumuna Yakınlaşıldı (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+
+      setGpsToastMessage(`${toast} (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
       setShowGpsToast(true);
-      setTimeout(() => setShowGpsToast(false), 3500);
-    } else if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      setTimeout(() => setShowGpsToast(false), 4000);
+    };
+
+    // If known from earlier in session, fly to it immediately
+    if (deviceLocationCoordsRef.current) {
+      const { lng, lat } = deviceLocationCoordsRef.current;
+      onLocationResolved(lng, lat, 'Mevcut Konumunuz', 850, '📍 Konuma Odaklanıldı');
+    }
+
+    // Two-tier GPS discovery optimized for iOS Safari and Android Chrome
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { longitude, latitude } = pos.coords;
-          deviceLocationCoordsRef.current = { lng: longitude, lat: latitude };
-          parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(longitude, latitude);
-          viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1200),
-            orientation: {
-              heading: Cesium.Math.toRadians(headingRef.current),
-              pitch: Cesium.Math.toRadians(pitchRef.current),
-              roll: 0,
+          onLocationResolved(longitude, latitude, 'Mevcut Konumunuz', 850, '📍 Mevcut Konumunuz Bulundu');
+
+          // High accuracy satellite lock refinement in background
+          navigator.geolocation.getCurrentPosition(
+            (gpsPos) => {
+              const fineLng = gpsPos.coords.longitude;
+              const fineLat = gpsPos.coords.latitude;
+              deviceLocationCoordsRef.current = { lng: fineLng, lat: fineLat };
+              updateUserLocationMarker(fineLng, fineLat, 'Mevcut GPS Konumunuz');
             },
-            duration: 1.6,
-            complete: () => updateCameraView(),
-          });
-          setGpsToastMessage(`📍 Cihaz Konumu Algılandı (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-          setShowGpsToast(true);
-          setTimeout(() => setShowGpsToast(false), 3500);
+            null,
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+          );
         },
-        (err) => {
-          alert('Cihaz konumu alınamadı. Lütfen cihazınızın konum servisini ve tarayıcı iznini kontrol ediniz.');
+        async (err) => {
+          console.warn('GPS doğrudan alınamadı, alternatif konum deneniyor:', err.code, err.message);
+          // Try IP lookup fallback
+          let ipSuccess = false;
+          try {
+            const res = await fetch('https://ipwho.is/');
+            const data = await res.json();
+            if (data && data.success && data.latitude && data.longitude) {
+              const city = data.city || 'Konumunuz';
+              onLocationResolved(data.longitude, data.latitude, `Mevcut Konum (${city})`, 2200, `📍 Yaklaşık Konum: ${city}`);
+              ipSuccess = true;
+            }
+          } catch (e) {}
+
+          if (!ipSuccess) {
+            try {
+              const res2 = await fetch('https://ipapi.co/json/');
+              const data2 = await res2.json();
+              if (data2 && data2.latitude && data2.longitude) {
+                const city = data2.city || 'Konumunuz';
+                onLocationResolved(data2.longitude, data2.latitude, `Mevcut Konum (${city})`, 2200, `📍 Yaklaşık Konum: ${city}`);
+                ipSuccess = true;
+              }
+            } catch (e) {}
+          }
+
+          if (!ipSuccess) {
+            setGpsToastMessage('⚠️ Konum İzni Kapalı (Tarayıcı Ayarlarından İzin Veriniz)');
+            setShowGpsToast(true);
+            setTimeout(() => setShowGpsToast(false), 5000);
+          }
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
       );
+    } else {
+      setGpsToastMessage('⚠️ Tarayıcınızda Konum Özelliği Desteklenmiyor');
+      setShowGpsToast(true);
+      setTimeout(() => setShowGpsToast(false), 4000);
     }
-  }, [updateCameraView]);
+  }, [updateUserLocationMarker]);
 
   // Expose Viewer methods to parent
   useEffect(() => {
@@ -1192,7 +1278,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         id="cesiumContainer"
         className={`relative overflow-hidden transition-all duration-300 ease-in-out bg-black ${getFormatClasses()}`}
       >
-        <div ref={containerRef} className="w-full h-full" />
+        <div ref={containerRef} className="w-full h-full touch-none select-none" />
 
         {/* Loading state or error */}
         {!isCesiumReady && !initError && (
@@ -1223,35 +1309,25 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
         {/* GPS Location Notification Toast */}
         {showGpsToast && (
-          <div className="absolute top-16 sm:top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950/90 backdrop-blur-xl border border-sky-400/40 text-sky-300 shadow-2xl text-xs font-semibold animate-in fade-in slide-in-from-top-3 duration-300">
+          <div className="absolute top-16 sm:top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950/95 backdrop-blur-xl border border-sky-400/40 text-sky-300 shadow-2xl text-xs font-semibold animate-in fade-in slide-in-from-top-3 duration-300 pointer-events-none">
             <LocateFixed className="w-4 h-4 text-sky-400 animate-spin" />
             <span>{gpsToastMessage}</span>
           </div>
         )}
 
-        {/* Quick 3D Terrain Kabartma Aktif / Pasif Toggle Button & GPS Button */}
-        <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
-          {/* GPS Konumuma Git Butonu */}
-          <button
-            onClick={flyToDeviceLocation}
-            className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl backdrop-blur-md bg-slate-950/80 hover:bg-slate-900 border border-white/20 hover:border-sky-400/60 text-sky-400 hover:text-sky-300 flex items-center gap-1.5 text-xs font-semibold shadow-xl transition active:scale-95 cursor-pointer"
-            title="Cihazımın GPS Konumuna Git"
-          >
-            <LocateFixed className="w-4 h-4" />
-            <span className="hidden sm:inline">Konumum</span>
-          </button>
-
+        {/* 3D Terrain Kabartma Aktif / Pasif Toggle Button (Positioned at top-left to avoid top-right toolbar clash) */}
+        <div className="absolute top-4 left-4 sm:left-14 z-30 flex items-center gap-2">
           <button
             onClick={onToggleTerrain}
-            className={`px-3 py-1.5 rounded-xl backdrop-blur-md border flex items-center gap-2 text-xs font-semibold shadow-xl transition cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl backdrop-blur-md border flex items-center gap-1.5 sm:gap-2 text-xs font-semibold shadow-xl transition cursor-pointer active:scale-95 ${
               isTerrainActive
-                ? 'bg-emerald-950/80 border-emerald-400/80 text-emerald-300 hover:bg-emerald-900/90 shadow-emerald-950/50'
-                : 'bg-black/70 border-white/20 text-slate-400 hover:text-white hover:bg-black/90'
+                ? 'bg-emerald-950/85 border-emerald-400/80 text-emerald-300 hover:bg-emerald-900/90 shadow-emerald-950/50'
+                : 'bg-slate-950/80 border-white/20 text-slate-400 hover:text-white hover:bg-black/90'
             }`}
             title="3D Arazi Topoğrafyası ve Dağ/Tepe Kabartmasını Aç / Kapat"
           >
-            <Mountain className={`w-4 h-4 ${isTerrainActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-            <span className="hidden sm:inline">3D Arazi Kabartması:</span>
+            <Mountain className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isTerrainActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+            <span className="hidden sm:inline">3D Arazi:</span>
             <span
               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                 isTerrainActive
@@ -1260,6 +1336,24 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               }`}
             >
               {isTerrainActive ? 'AKTİF' : 'PASİF'}
+            </span>
+          </button>
+        </div>
+
+        {/* Floating Google Maps-style "Konumuma Git" (GPS) Button (Highly visible on Mobile iOS & Android) */}
+        <div className="absolute bottom-20 sm:bottom-6 right-3 sm:right-6 z-30 flex flex-col items-end gap-2">
+          <button
+            id="btn-floating-my-location"
+            onClick={flyToDeviceLocation}
+            className="group relative flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-slate-950/90 hover:bg-slate-900 active:bg-slate-800 border-2 border-sky-400/70 hover:border-sky-300 text-white shadow-2xl shadow-sky-500/30 backdrop-blur-xl transition active:scale-95 cursor-pointer"
+            title="Haritayı Mevcut Konumuma Getir (GPS)"
+          >
+            <div className="relative flex items-center justify-center">
+              <span className="absolute -inset-1 rounded-full bg-sky-400/30 animate-ping" />
+              <LocateFixed className="w-5 h-5 text-sky-400 group-hover:rotate-45 transition duration-300" />
+            </div>
+            <span className="text-xs font-bold text-sky-200 tracking-wide">
+              Konumuma Git
             </span>
           </button>
         </div>

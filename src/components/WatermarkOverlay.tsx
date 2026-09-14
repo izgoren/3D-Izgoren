@@ -32,7 +32,7 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
     activeParcel?.district,
     activeParcel?.neighborhood,
   ].filter(Boolean);
-  const locationTitle = locationParts.length > 0 ? locationParts.join(' / ') : 'Konum Belirtilmedi';
+  const locationTitle = locationParts.length > 0 ? locationParts.join(' / ') : '3D Küresel Uydu Haritası';
 
   // Ada Parsel Text
   const adaParselDisplay =

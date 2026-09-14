@@ -43,6 +43,7 @@ import {
   WatermarkConfig,
 } from '../types';
 import { parseKMLString, parseKMZFile, parseGeoJSON, formatArea } from '../utils/geoUtils';
+import { DEFAULT_PARCEL } from '../data/demoParcels';
 import { ViewerMethods } from './CesiumViewer';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -85,7 +86,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onToggleTerrain,
   viewerMethods,
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
   const [activeTab, setActiveTab] = useState<TabType>('map');
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ text: string; isError: boolean } | null>(null);
@@ -212,10 +218,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {/* GPS Konum Butonu */}
             <button
               onClick={() => viewerMethods?.flyToDeviceLocation()}
-              className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-sky-400 flex items-center justify-center active:scale-95 transition"
+              className="h-11 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 text-sky-300 flex items-center gap-1.5 active:scale-95 transition"
               title="Konumuma Git (GPS)"
             >
-              <LocateFixed className="w-4 h-4" />
+              <LocateFixed className="w-4 h-4 text-sky-400" />
+              <span className="text-[11px] font-bold text-sky-200">Konumum</span>
             </button>
 
             <button
@@ -400,7 +407,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       Altlık Harita Katmanı
                     </label>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                      ⚡ Ultra HD (512px)
+                      ⚡ Yüksek Çözünürlük
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -424,16 +431,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       <div className="text-left overflow-hidden">
                         <div className="text-xs font-bold leading-tight flex items-center gap-1">
                           <span>Google Hibrit</span>
-                          <span className={`text-[8px] px-1 py-0.2 rounded font-black ${
-                            baseMap === 'google_hybrid' ? 'bg-slate-950 text-sky-300' : 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
-                          }`}>HD</span>
                         </div>
                         <div
                           className={`text-[10px] leading-tight truncate ${
                             baseMap === 'google_hybrid' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
                           }`}
                         >
-                          512px Uydu + Yol & İsimler
+                          Uydu + Yol & İsimler
                         </div>
                       </div>
                     </button>
@@ -458,16 +462,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       <div className="text-left overflow-hidden">
                         <div className="text-xs font-bold leading-tight flex items-center gap-1">
                           <span>Google Saf</span>
-                          <span className={`text-[8px] px-1 py-0.2 rounded font-black ${
-                            baseMap === 'google_satellite' ? 'bg-slate-950 text-sky-300' : 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
-                          }`}>HD</span>
                         </div>
                         <div
                           className={`text-[10px] leading-tight truncate ${
                             baseMap === 'google_satellite' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
                           }`}
                         >
-                          512px Saf Net Uydu
+                          Saf Net Uydu
                         </div>
                       </div>
                     </button>
@@ -535,9 +536,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-sky-950/40 border border-sky-400/20 flex items-center justify-between text-[10px] text-sky-300">
                     <span className="flex items-center gap-1.5 font-medium">
                       <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                      Ultra HD (Retina/512px) Çözünürlük Aktif
+                      Yüksek Çözünürlük (Retina & WebGL) Aktif
                     </span>
-                    <span className="font-mono text-[9px] text-sky-400/80">Zoom 22 Max</span>
+                    <span className="font-mono text-[9px] text-sky-400/80">Net Uydu</span>
                   </div>
 
                   {/* GPS Konumuma Odaklan Butonu */}
@@ -915,8 +916,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   )}
                 </div>
 
-                {/* Aktif Parsel Detay Kartı */}
-                {activeParcel && areaDetails && (
+                {/* Aktif Parsel Detay Kartı veya Canlı Konum Bilgisi */}
+                {activeParcel && areaDetails ? (
                   <div className="p-3.5 rounded-xl bg-white/5 border border-sky-400/30 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-white truncate">
@@ -955,6 +956,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         </span>
                       </div>
                     )}
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-sky-950/40 border border-sky-500/30 space-y-2.5">
+                    <div className="flex items-center gap-2 text-sky-400">
+                      <Globe className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span className="text-xs font-bold text-white">3D Küresel Dünya Görünümü</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Açılışta küresel 3D uydu görüntüsü yüklenmiştir. KML/KMZ dosyası yükleyebilir, manuel parsel çizebilir veya "Konumuma Git" ile mevcut konumunuza yaklaşabilirsiniz.
+                    </p>
+                    <div className="pt-1 flex items-center gap-2">
+                      <button
+                        onClick={() => onParcelLoaded(DEFAULT_PARCEL)}
+                        className="text-[11px] px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/15 text-slate-200 flex items-center gap-1.5 transition active:scale-95"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Örnek Parseli Yükle (Bursa)</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1173,6 +1193,27 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       </button>
                     )}
                   </div>
+
+                  {watermarkConfig.logoUrl && (
+                    <div className="mt-2 flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <img
+                          src={watermarkConfig.logoUrl}
+                          alt="Logo Önizleme"
+                          className="w-7 h-7 object-contain rounded-md bg-slate-900 p-0.5 border border-white/10 shrink-0"
+                        />
+                        <span className="text-[11px] text-slate-300 truncate">
+                          Özel Logo Yüklendi
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => onWatermarkChange({ logoUrl: null })}
+                        className="text-[10px] text-red-400 hover:text-red-300 underline shrink-0 ml-2"
+                      >
+                        Kaldır
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Filigran Şeffaflığı (Opaklık) */}

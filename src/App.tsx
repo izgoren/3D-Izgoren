@@ -44,8 +44,8 @@ export default function App() {
     elevation: 0,
   });
 
-  // Active Loaded Parcel (Default to clean initial parcel)
-  const [activeParcel, setActiveParcel] = useState<ParcelInfo | null>(DEFAULT_PARCEL);
+  // Active Loaded Parcel (Null by default so real current location is shown on startup)
+  const [activeParcel, setActiveParcel] = useState<ParcelInfo | null>(null);
 
   // Parcel Styling
   const [parcelStyle, setParcelStyle] = useState<ParcelStyle>({
