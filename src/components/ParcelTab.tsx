@@ -4,11 +4,11 @@ import {
   Upload,
   CheckCircle2,
   Globe,
-  Sparkles,
   FileCode2,
+  Home,
+  Trash2,
 } from 'lucide-react';
 import { ParcelInfo } from '../types';
-import { DEFAULT_PARCEL } from '../data/demoParcels';
 import { formatArea } from '../utils/geoUtils';
 import { PriceInput } from './PriceInput';
 
@@ -20,6 +20,7 @@ interface ParcelTabProps {
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   uploadLoading: boolean;
   uploadMsg: { text: string; isError: boolean } | null;
+  onClearParcel?: () => void;
 }
 
 export const ParcelTab: React.FC<ParcelTabProps> = ({
@@ -30,6 +31,7 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
   handleFileUpload,
   uploadLoading,
   uploadMsg,
+  onClearParcel,
 }) => {
   const areaDetails = activeParcel ? formatArea(activeParcel.areaM2) : null;
 
@@ -241,26 +243,30 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
               </span>
             </div>
           )}
+
+          {/* Parseli Kapat / Tanıtım Ekranına Dön */}
+          {onClearParcel && (
+            <div className="pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={onClearParcel}
+                className="w-full py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-sky-400/30 hover:border-sky-400/60 text-sky-300 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
+              >
+                <Home className="w-3.5 h-3.5 text-sky-400" />
+                <span>Parseli Kapat (İzgören Harita Ekranına Dön)</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="p-3.5 rounded-xl bg-sky-950/40 border border-sky-500/30 space-y-2.5">
+        <div className="p-3.5 rounded-xl bg-sky-950/40 border border-sky-500/30 space-y-2">
           <div className="flex items-center gap-2 text-sky-400">
             <Globe className="w-4 h-4 text-sky-400 shrink-0" />
-            <span className="text-xs font-bold text-white">3D Küresel Harita Hazır</span>
+            <span className="text-xs font-bold text-white">Parsel Yüklenmedi</span>
           </div>
           <p className="text-[11px] text-slate-300 leading-relaxed">
-            Yukarıdaki <strong>Kendi Parsel Dosyanızı Yükleyin</strong> butonundan KML/KMZ dosyanızı aktarabilir veya aşağıdaki örnek parselle hemen denemeye başlayabilirsiniz.
+            3D harita ve filigran oluşturmak için yukarıdaki <strong>Kendi Parsel Dosyanızı Yükleyin</strong> butonundan .KML, .KMZ veya .GeoJSON dosyanızı yükleyebilirsiniz.
           </p>
-          <div className="pt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onParcelLoaded(DEFAULT_PARCEL)}
-              className="text-[11px] px-3 py-2 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 flex items-center gap-1.5 transition active:scale-95 cursor-pointer font-semibold"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Örnek Parseli Yükle (Bursa)</span>
-            </button>
-          </div>
         </div>
       )}
     </div>

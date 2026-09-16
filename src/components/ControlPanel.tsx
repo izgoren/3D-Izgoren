@@ -80,6 +80,7 @@ interface ControlPanelProps {
   onToggleOpen?: () => void;
   screenHeightPercent: number;
   onScreenHeightPercentChange: (percent: number) => void;
+  onClearParcel?: () => void;
 }
 
 type TabType = 'parcel' | 'camera' | 'style' | 'watermark' | 'export';
@@ -105,6 +106,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onToggleOpen,
   screenHeightPercent,
   onScreenHeightPercentChange,
+  onClearParcel,
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -492,6 +494,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 handleFileUpload={handleFileUpload}
                 uploadLoading={uploadLoading}
                 uploadMsg={uploadMsg}
+                onClearParcel={onClearParcel}
               />
             )}
             
