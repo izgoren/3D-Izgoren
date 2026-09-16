@@ -50,6 +50,8 @@ import { parseKMLString, parseKMZFile, parseGeoJSON, formatArea } from '../utils
 import { DEFAULT_PARCEL } from '../data/demoParcels';
 import { ViewerMethods } from './CesiumViewer';
 import { PWAInstallButton } from './PWAInstallButton';
+import { ParcelTab } from './ParcelTab';
+import { PriceInput } from './PriceInput';
 import {
   saveDefaultCompanyInfo,
   loadDefaultCompanyInfo,
@@ -80,7 +82,7 @@ interface ControlPanelProps {
   onScreenHeightPercentChange: (percent: number) => void;
 }
 
-type TabType = 'camera' | 'parcel' | 'style' | 'watermark' | 'export';
+type TabType = 'parcel' | 'camera' | 'style' | 'watermark' | 'export';
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   baseMap,
@@ -122,12 +124,43 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
-  const [activeTab, setActiveTab] = useState<TabType>('camera');
+  const [activeTab, setActiveTab] = useState<TabType>('parcel');
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
   const [hasSavedDefaults, setHasSavedDefaults] = useState<boolean>(() => hasSavedDefaultCompanyInfo());
   const [defaultSaveFeedback, setDefaultSaveFeedback] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  // Device type detection for optimal sizing
+  const getDeviceInfo = () => {
+    if (typeof window === 'undefined') return { type: 'pc', name: 'PC', label: '💻 PC (1080p)' };
+    const w = window.innerWidth;
+    if (w < 640) return { type: 'phone', name: 'Telefon', label: '📱 Telefon' };
+    if (w < 1024) return { type: 'tablet', name: 'Tablet', label: '📟 Tablet' };
+    return { type: 'pc', name: 'Bilgisayar', label: '💻 Masaüstü (PC)' };
+  };
+
+  const detectedDeviceInfo = getDeviceInfo();
+
+  const handleApplySpecificDevice = (type: 'phone' | 'tablet' | 'pc') => {
+    if (type === 'phone') {
+      onVideoFormatChange('reels');
+      onScreenHeightPercentChange(100);
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        setIsCollapsed(true);
+      }
+    } else if (type === 'tablet') {
+      onVideoFormatChange('youtube');
+      onScreenHeightPercentChange(100);
+    } else {
+      onVideoFormatChange('youtube');
+      onScreenHeightPercentChange(100);
+    }
+  };
+
+  const handleApplyOptimalDeviceSize = () => {
+    handleApplySpecificDevice(detectedDeviceInfo.type as any);
+  };
 
   const handleSaveDefaultWatermark = () => {
     const success = saveDefaultCompanyInfo(watermarkConfig);
@@ -158,6 +191,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         position: saved.position ?? watermarkConfig.position,
         adaParselPosition: saved.adaParselPosition ?? watermarkConfig.adaParselPosition,
         opacity: saved.opacity ?? watermarkConfig.opacity,
+        scale: saved.scale ?? watermarkConfig.scale ?? 1.0,
         showLocationBadge: saved.showLocationBadge ?? watermarkConfig.showLocationBadge,
       });
       setDefaultSaveFeedback({
@@ -234,6 +268,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       setUploadMsg({ text: err.message || 'Dosya okuma başarısız', isError: true });
     } finally {
       setUploadLoading(false);
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -379,20 +416,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             </div>
           </div>
 
-          {/* Navigation Tabs with comfortable touch targets */}
+          {/* Navigation Tabs with comfortable touch targets - PARSEL BAŞTA */}
           <div className="flex items-center border-b border-white/10 bg-slate-950/80 p-1.5 gap-1 overflow-x-auto scrollbar-none shrink-0">
-            <button
-              onClick={() => setActiveTab('camera')}
-              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'camera'
-                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>3D Tur</span>
-            </button>
-
             <button
               onClick={() => setActiveTab('parcel')}
               className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -403,6 +428,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             >
               <Upload className="w-3.5 h-3.5" />
               <span>Parsel</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('camera')}
+              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'camera'
+                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>3D Tur</span>
             </button>
 
             <button
@@ -444,6 +481,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {/* Tab Contents - Scrollable with comfortable touch padding */}
           <div className="flex-1 p-4 overflow-y-auto overscroll-contain space-y-4 text-xs">
+            
+            {/* TAB 1: PARSEL YÜKLE & YÖNET (BAŞA ALINDI) */}
+            {activeTab === 'parcel' && (
+              <ParcelTab
+                activeParcel={activeParcel}
+                onParcelLoaded={onParcelLoaded}
+                onUpdateParcel={onUpdateParcel}
+                fileInputRef={fileInputRef}
+                handleFileUpload={handleFileUpload}
+                uploadLoading={uploadLoading}
+                uploadMsg={uploadMsg}
+              />
+            )}
             
             {/* TAB: 3D TUR & HARİTA */}
             {activeTab === 'camera' && (
@@ -578,11 +628,83 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </p>
                 </div>
 
+                {/* Telefon, Tablet ve PC Otomatik En İyi Görsel Boyut */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-500/15 via-blue-500/10 to-indigo-500/15 border border-sky-400/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-sky-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Cihaza Özel En İyi Görsel Boyut</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/25 border border-sky-400/40 text-sky-200 font-semibold font-mono">
+                      {detectedDeviceInfo.label}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Kullandığınız cihaza göre ekranı en verimli, net ve tam ölçekte kaplayan ideal görsel boyutunu tek tıkla otomatik uygular.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleApplyOptimalDeviceSize}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 active:scale-98 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition cursor-pointer"
+                  >
+                    <Scaling className="w-3.5 h-3.5" />
+                    <span>⚡ {detectedDeviceInfo.name} İçin En İyi Boyuta Uyarla</span>
+                  </button>
+
+                  <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleApplySpecificDevice('phone')}
+                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
+                        videoFormat === 'reels' && screenHeightPercent === 100
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow'
+                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="text-[10px] font-semibold">📱 Telefon</div>
+                      <div className="text-[8px] opacity-75">9:16 Dikey</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplySpecificDevice('tablet')}
+                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
+                        screenHeightPercent === 100 && videoFormat !== 'reels'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow'
+                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="text-[10px] font-semibold">📟 Tablet</div>
+                      <div className="text-[8px] opacity-75">Geniş Ekran</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplySpecificDevice('pc')}
+                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
+                        videoFormat === 'youtube' && screenHeightPercent === 100
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow'
+                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="text-[10px] font-semibold">💻 PC (1080p)</div>
+                      <div className="text-[8px] opacity-75">16:9 Full HD</div>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Video Kadrajı Formatı */}
                 <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                  <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider block">
-                    Video Kadraj Oranı
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider block">
+                      Video Kadraj Oranı
+                    </label>
+                    <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-400/20">
+                      1080p Full HD
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => onVideoFormatChange('reels')}
@@ -593,7 +715,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">9:16 Reels / Shorts</span>
-                      <span className="text-[10px] opacity-75 font-mono">405 × 720</span>
+                      <span className="text-[10px] opacity-75 font-mono">1080 × 1920 (1080p)</span>
                     </button>
 
                     <button
@@ -605,7 +727,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">1:1 Gönderi</span>
-                      <span className="text-[10px] opacity-75 font-mono">600 × 600</span>
+                      <span className="text-[10px] opacity-75 font-mono">1080 × 1080 (1080p)</span>
                     </button>
 
                     <button
@@ -617,7 +739,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">4:5 Portre Feed</span>
-                      <span className="text-[10px] opacity-75 font-mono">480 × 600</span>
+                      <span className="text-[10px] opacity-75 font-mono">1080 × 1350 (1080p)</span>
                     </button>
 
                     <button
@@ -629,7 +751,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">16:9 Full Screen</span>
-                      <span className="text-[10px] opacity-75 font-mono">YouTube & TV</span>
+                      <span className="text-[10px] opacity-75 font-mono">1920 × 1080 (Full HD)</span>
                     </button>
                   </div>
                 </div>
@@ -783,221 +905,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </div>
             )}
 
-            {/* TAB 3: PARSEL YÜKLE & YÖNET */}
-            {activeTab === 'parcel' && (
-              <div className="space-y-4">
-                {/* Manuel Parsel Bilgileri (Elle Giriş & Düzenleme) */}
-                <div className="space-y-3 p-3.5 rounded-xl bg-white/5 border border-sky-400/30">
-                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                    <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-rose-400" />
-                      Parsel Bilgileri (Elle Giriş)
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-medium">Filigrana Yansır</span>
-                  </div>
-
-                  {/* İl & İlçe */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">İl:</label>
-                      <input
-                        type="text"
-                        value={activeParcel?.city || ''}
-                        onChange={(e) => onUpdateParcel({ city: e.target.value })}
-                        placeholder="Örn: Bursa"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">İlçe:</label>
-                      <input
-                        type="text"
-                        value={activeParcel?.district || ''}
-                        onChange={(e) => onUpdateParcel({ district: e.target.value })}
-                        placeholder="Örn: Nilüfer"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Mahalle */}
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Mahalle / Mevkii:</label>
-                    <input
-                      type="text"
-                      value={activeParcel?.neighborhood || ''}
-                      onChange={(e) => onUpdateParcel({ neighborhood: e.target.value })}
-                      placeholder="Örn: Özlüce / Görükle"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
-                    />
-                  </div>
-
-                  {/* Ada No & Parsel No */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-amber-300 font-semibold block mb-1">Ada No:</label>
-                      <input
-                        type="text"
-                        value={activeParcel?.adaNo || ''}
-                        onChange={(e) => onUpdateParcel({ adaNo: e.target.value })}
-                        placeholder="Örn: 2412"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-amber-400/30 text-amber-300 font-mono text-xs font-bold placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-amber-300 font-semibold block mb-1">Parsel No:</label>
-                      <input
-                        type="text"
-                        value={activeParcel?.parselNo || ''}
-                        onChange={(e) => onUpdateParcel({ parselNo: e.target.value })}
-                        placeholder="Örn: 8"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-amber-400/30 text-amber-300 font-mono text-xs font-bold placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Alan (m²) & Fiyat */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Yüzölçümü (m²):</label>
-                      <input
-                        type="number"
-                        value={activeParcel?.areaM2 || ''}
-                        onChange={(e) => onUpdateParcel({ areaM2: parseFloat(e.target.value) || 0 })}
-                        placeholder="Örn: 2450"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white font-mono text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-emerald-400 block mb-1">Satış Bedeli / Fiyat:</label>
-                      <input
-                        type="text"
-                        value={activeParcel?.price || ''}
-                        onChange={(e) => onUpdateParcel({ price: e.target.value })}
-                        placeholder="Örn: 18.500.000 ₺"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-emerald-400/30 text-emerald-300 font-semibold text-xs placeholder:text-slate-500 focus:outline-none focus:border-emerald-400"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nitelik & Açıklama */}
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Nitelik / Açıklama:</label>
-                    <input
-                      type="text"
-                      value={activeParcel?.description || ''}
-                      onChange={(e) => onUpdateParcel({ description: e.target.value })}
-                      placeholder="Örn: İmarlı Arsa E=1.50 Konut Alanı"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/15 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
-                    />
-                  </div>
-                </div>
-
-                {/* Upload File Box */}
-                <div className="pt-2 border-t border-white/10">
-                  <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mb-2 block">
-                    Kendi Parsel Dosyanızı Yükleyin
-                  </label>
-                  
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".kml,.kmz,.geojson,.json"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-
-                  <button
-                    disabled={uploadLoading}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full py-3.5 px-3 border-2 border-dashed border-sky-400/40 hover:border-sky-400 rounded-xl bg-sky-500/5 hover:bg-sky-500/10 flex flex-col items-center justify-center gap-1 text-center transition cursor-pointer"
-                  >
-                    <Upload className="w-4 h-4 text-sky-400" />
-                    <span className="font-semibold text-white text-xs">.KML, .KMZ veya .GeoJSON Seçin</span>
-                    <span className="text-[10px] text-slate-400">
-                      Netcad, Google Earth veya TKGM Kadastro Dosyası
-                    </span>
-                  </button>
-
-                  {uploadMsg && (
-                    <div
-                      className={`mt-2 p-2 rounded-lg text-[11px] flex items-center gap-2 ${
-                        uploadMsg.isError
-                          ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span>{uploadMsg.text}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Aktif Parsel Detay Kartı veya Canlı Konum Bilgisi */}
-                {activeParcel && areaDetails ? (
-                  <div className="p-3.5 rounded-xl bg-white/5 border border-sky-400/30 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-white truncate">
-                        {activeParcel.name}
-                      </span>
-                      <span className="text-[10px] text-sky-400 font-mono">
-                        {activeParcel.coordinates.length} Köşe Noktası
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                        <span className="text-[10px] text-slate-400 block">Parsel Alanı:</span>
-                        <span className="text-xs font-bold text-amber-300 font-mono">
-                          {areaDetails.m2}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block">
-                          ({areaDetails.donum})
-                        </span>
-                      </div>
-
-                      <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                        <span className="text-[10px] text-slate-400 block">Çevre Uzunluğu:</span>
-                        <span className="text-xs font-bold text-sky-300 font-mono">
-                          {activeParcel.perimeterM.toLocaleString('tr-TR')} m
-                        </span>
-                        <span className="text-[10px] text-slate-400 block">Sınır Çiti</span>
-                      </div>
-                    </div>
-
-                    {activeParcel.adaNo && (
-                      <div className="text-[11px] text-slate-300 flex items-center justify-between border-t border-white/10 pt-2">
-                        <span>Ada / Parsel:</span>
-                        <span className="font-mono font-bold text-white">
-                          Ada {activeParcel.adaNo} • Parsel {activeParcel.parselNo}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-3.5 rounded-xl bg-sky-950/40 border border-sky-500/30 space-y-2.5">
-                    <div className="flex items-center gap-2 text-sky-400">
-                      <Globe className="w-4 h-4 text-sky-400 shrink-0" />
-                      <span className="text-xs font-bold text-white">3D Küresel Dünya Görünümü</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      Açılışta küresel 3D uydu görüntüsü yüklenmiştir. KML/KMZ dosyası yükleyebilir, manuel parsel çizebilir veya "Konumuma Git" ile mevcut konumunuza yaklaşabilirsiniz.
-                    </p>
-                    <div className="pt-1 flex items-center gap-2">
-                      <button
-                        onClick={() => onParcelLoaded(DEFAULT_PARCEL)}
-                        className="text-[11px] px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/15 text-slate-200 flex items-center gap-1.5 transition active:scale-95"
-                      >
-                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Örnek Parseli Yükle (Bursa)</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 4: STİL & GÖRÜNÜM */}
+            {/* TAB: STİL & GÖRÜNÜM */}
             {activeTab === 'style' && (
               <div className="space-y-4">
                 {/* Sınır Rengi */}
@@ -1233,14 +1141,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 </div>
 
                 {/* Fiyat Etiketi */}
-                <div>
-                  <label className="text-[11px] text-slate-400 block mb-1">Fiyat Etiketi (Opsiyonel):</label>
-                  <input
-                    type="text"
+                <div className="pt-1 border-t border-white/5">
+                  <PriceInput
                     value={watermarkConfig.priceTag}
-                    onChange={(e) => onWatermarkChange({ priceTag: e.target.value })}
-                    placeholder="Örn: 18.500.000 ₺"
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/15 text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                    onChange={(formatted) => onWatermarkChange({ priceTag: formatted })}
+                    label="Fiyat Etiketi (Otomatik Basamaklı & Dövizli):"
+                    placeholder="Örn: 18500000"
                   />
                 </div>
 
@@ -1295,6 +1201,55 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* Filigran Boyutu & Ölçekleme */}
+                <div className="pt-2 border-t border-white/10 space-y-2">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                      <Scaling className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Filigran Boyutu (Ölçekleme):</span>
+                    </span>
+                    <span className="text-sky-400 font-mono font-bold bg-sky-500/20 px-2 py-0.5 rounded border border-sky-400/30">
+                      %{Math.round((watermarkConfig.scale ?? 1.0) * 100)}
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="50"
+                    max="180"
+                    step="5"
+                    value={Math.round((watermarkConfig.scale ?? 1.0) * 100)}
+                    onChange={(e) =>
+                      onWatermarkChange({ scale: parseInt(e.target.value, 10) / 100 })
+                    }
+                    className="w-full accent-sky-400 cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                  />
+
+                  <div className="grid grid-cols-5 gap-1 pt-0.5">
+                    {[
+                      { val: 0.7, label: '%70', desc: 'Kompakt' },
+                      { val: 0.85, label: '%85', desc: 'Küçük' },
+                      { val: 1.0, label: '%100', desc: 'Standart' },
+                      { val: 1.2, label: '%120', desc: 'Büyük' },
+                      { val: 1.4, label: '%140', desc: 'Geniş' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => onWatermarkChange({ scale: preset.val })}
+                        className={`py-1 px-1 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
+                          Math.round((watermarkConfig.scale ?? 1.0) * 100) === Math.round(preset.val * 100)
+                            ? 'bg-sky-500 text-slate-950 font-bold border-sky-400'
+                            : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-[10px] font-bold">{preset.label}</div>
+                        <div className="text-[8px] opacity-75">{preset.desc}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Filigran Şeffaflığı (Opaklık) */}
@@ -1395,11 +1350,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {activeTab === 'export' && (
               <div className="space-y-4">
                 <div className="p-3.5 rounded-xl bg-gradient-to-br from-sky-500/10 to-blue-500/5 border border-sky-500/20">
-                  <span className="text-xs font-bold text-sky-300 block mb-1">
-                    Sinematik 3D Video & Fotoğraf (MP4)
-                  </span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-sky-300">
+                      Sinematik 3D Video & Fotoğraf (1080p MP4)
+                    </span>
+                    <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-400/30">
+                      1080p Full HD
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-300">
-                    Instagram Reels, TikTok veya YouTube için filigranlı ve 3D kamera turlu yüksek kaliteli MP4 formatında video kaydedin.
+                    Instagram Reels, TikTok veya YouTube için filigranlı ve 3D kamera turlu 1080p Full HD kalitesinde MP4 formatında video kaydedin.
                   </p>
                 </div>
 
@@ -1407,10 +1367,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider block">
-                      3D Video Kaydı (MP4)
+                      3D Video Kaydı (1080p MP4)
                     </label>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">
-                      MP4 FORMATI
+                      1080p MP4
                     </span>
                   </div>
 
@@ -1420,7 +1380,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-red-500/30 animate-pulse cursor-pointer"
                     >
                       <Square className="w-4 h-4 fill-white" />
-                      <span>Kaydı Durdur ve MP4 İndir</span>
+                      <span>Kaydı Durdur ve 1080p MP4 İndir</span>
                     </button>
                   ) : (
                     <button
@@ -1434,11 +1394,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 hover:brightness-110 transition cursor-pointer"
                     >
                       <VideoIcon className="w-4 h-4" />
-                      <span>MP4 Video Kaydını Başlat</span>
+                      <span>1080p MP4 Video Kaydını Başlat</span>
                     </button>
                   )}
                   <p className="text-[10px] text-slate-400 text-center">
-                    Kayıt başlarken 3D kamera turu otomatik döner ve video MP4 dosyası olarak cihazınıza indirilir.
+                    Kayıt başlarken 3D sinematik tur devreye girer ve video 1080p yüksek çözünürlüklü MP4 olarak indirilir.
                   </p>
                 </div>
 

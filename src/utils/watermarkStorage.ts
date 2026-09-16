@@ -11,6 +11,7 @@ export interface DefaultCompanyInfo {
   position?: WatermarkConfig['position'];
   adaParselPosition?: WatermarkConfig['adaParselPosition'];
   opacity?: number;
+  scale?: number;
   showLocationBadge?: boolean;
   savedAt?: string;
 }
@@ -29,6 +30,7 @@ export function saveDefaultCompanyInfo(config: WatermarkConfig): boolean {
       position: config.position || 'bottom-right',
       adaParselPosition: config.adaParselPosition || 'inside',
       opacity: typeof config.opacity === 'number' ? config.opacity : 0.85,
+      scale: typeof config.scale === 'number' ? config.scale : 1.0,
       showLocationBadge: config.showLocationBadge ?? true,
       savedAt: new Date().toISOString(),
     };

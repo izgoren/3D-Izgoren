@@ -55,6 +55,7 @@ export interface WatermarkConfig {
   position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'bottom-center' | 'top-center';
   adaParselPosition: 'inside' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   opacity: number; // 0.1 to 1.0
+  scale?: number; // 0.5 to 2.0 (1.0 = 100% standard size)
   showLocationBadge: boolean;
   badgeStyle: 'glass' | 'solid' | 'minimal';
 }

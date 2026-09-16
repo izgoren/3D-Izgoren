@@ -159,7 +159,13 @@ export default function App() {
 
   const handleUpdateParcel = useCallback((partial: Partial<ParcelInfo>) => {
     setActiveParcel((prev) => {
-      if (!prev) return null;
+      if (!prev) {
+        // Parsel henüz seçilmemiş veya oluşturulmamışsa varsayılan şablon üzerine uygula
+        return {
+          ...DEFAULT_PARCEL,
+          ...partial,
+        };
+      }
       return {
         ...prev,
         ...partial,

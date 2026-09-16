@@ -153,10 +153,40 @@ export function parseKMLString(kmlText: string, defaultName = 'Yüklenen Parsel'
     const area = calculateArea(parsedCoords);
     const perimeter = calculatePerimeter(parsedCoords);
 
+    // Try extracting Ada/Parsel/City/District from KML extended data or name
+    let adaNo = '';
+    let parselNo = '';
+    let district = '';
+    let neighborhood = '';
+
+    // Regex match on name or description like "Ada 2412 Parsel 8" or "2412/8"
+    const nameMatch = name.match(/(?:ada\s*[:#]?\s*(\d+))?[,\s\/-]*(?:parsel\s*[:#]?\s*(\d+))/i) ||
+                     name.match(/(\d+)\s*[\/]\s*(\d+)/);
+    if (nameMatch) {
+      if (nameMatch[1]) adaNo = nameMatch[1];
+      if (nameMatch[2]) parselNo = nameMatch[2];
+    }
+
+    // ExtendedData parsing
+    const simpleDatas = xml.querySelectorAll('SimpleData, Data');
+    simpleDatas.forEach((sd) => {
+      const attrName = (sd.getAttribute('name') || '').toLowerCase();
+      const textVal = sd.textContent?.trim() || '';
+      if (!textVal) return;
+      if (attrName.includes('ada')) adaNo = textVal;
+      else if (attrName.includes('parsel')) parselNo = textVal;
+      else if (attrName.includes('ilce') || attrName.includes('district')) district = textVal;
+      else if (attrName.includes('mahalle') || attrName.includes('koy')) neighborhood = textVal;
+    });
+
     return {
       id: 'kml-' + Date.now(),
       name,
       city: 'Özel Konum',
+      district: district || undefined,
+      neighborhood: neighborhood || undefined,
+      adaNo: adaNo || undefined,
+      parselNo: parselNo || undefined,
       areaM2: area,
       perimeterM: perimeter,
       coordinates: parsedCoords,
@@ -192,15 +222,28 @@ export function parseGeoJSON(jsonText: string, defaultName = 'GeoJSON Parsel'): 
   let coordsArray: any[] = [];
   let detectedName = defaultName;
 
+  let detectedAda = '';
+  let detectedParsel = '';
+  let detectedCity = 'Özel Konum';
+  let detectedDistrict = '';
+
   if (json.type === 'FeatureCollection' && json.features?.length > 0) {
     const feat = json.features[0];
     if (feat.properties?.name) detectedName = feat.properties.name;
     if (feat.properties?.ada && feat.properties?.parsel) {
       detectedName = `Ada ${feat.properties.ada} / Parsel ${feat.properties.parsel}`;
+      detectedAda = String(feat.properties.ada);
+      detectedParsel = String(feat.properties.parsel);
     }
+    if (feat.properties?.il || feat.properties?.city) detectedCity = feat.properties.il || feat.properties.city;
+    if (feat.properties?.ilce || feat.properties?.district) detectedDistrict = feat.properties.ilce || feat.properties.district;
     coordsArray = feat.geometry?.coordinates;
   } else if (json.type === 'Feature') {
     if (json.properties?.name) detectedName = json.properties.name;
+    if (json.properties?.ada) detectedAda = String(json.properties.ada);
+    if (json.properties?.parsel) detectedParsel = String(json.properties.parsel);
+    if (json.properties?.il || json.properties?.city) detectedCity = json.properties.il || json.properties.city;
+    if (json.properties?.ilce || json.properties?.district) detectedDistrict = json.properties.ilce || json.properties.district;
     coordsArray = json.geometry?.coordinates;
   } else if (json.coordinates) {
     coordsArray = json.coordinates;
@@ -247,7 +290,10 @@ export function parseGeoJSON(jsonText: string, defaultName = 'GeoJSON Parsel'): 
   return {
     id: 'geojson-' + Date.now(),
     name: detectedName,
-    city: 'Özel Konum',
+    city: detectedCity,
+    district: detectedDistrict || undefined,
+    adaNo: detectedAda || undefined,
+    parselNo: detectedParsel || undefined,
     areaM2: calculateArea(coords),
     perimeterM: calculatePerimeter(coords),
     coordinates: coords,

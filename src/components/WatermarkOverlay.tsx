@@ -41,6 +41,27 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
       ? `Ada: ${activeParcel?.adaNo || '-'} / Parsel: ${activeParcel?.parselNo || '-'}`
       : null);
 
+  const userScale = typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1.0;
+
+  const getTransformOrigin = (pos: string) => {
+    switch (pos) {
+      case 'bottom-right':
+        return 'bottom right';
+      case 'bottom-left':
+        return 'bottom left';
+      case 'top-right':
+        return 'top right';
+      case 'top-left':
+        return 'top left';
+      case 'bottom-center':
+        return 'bottom center';
+      case 'top-center':
+        return 'top center';
+      default:
+        return 'bottom right';
+    }
+  };
+
   return (
     <>
       {/* Separate Floating Ada/Parsel Badge if configured */}
@@ -49,7 +70,11 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
           className={`absolute z-30 pointer-events-none transition-all duration-300 ${
             separateBadgePositions[config.adaParselPosition] || 'top-3 left-3 sm:top-6 sm:left-6'
           }`}
-          style={{ opacity: config.opacity ?? 0.85 }}
+          style={{
+            opacity: config.opacity ?? 0.85,
+            transform: userScale !== 1 ? `scale(${userScale})` : undefined,
+            transformOrigin: config.adaParselPosition?.includes('right') ? 'top right' : 'top left',
+          }}
         >
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-xl border border-amber-400/40 shadow-2xl shadow-black text-amber-300 font-mono text-xs select-none">
             <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -68,7 +93,11 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
         className={`absolute z-30 pointer-events-none transition-all duration-300 max-w-[calc(100%-1.5rem)] sm:max-w-[360px] ${
           positionClasses[config.position] || positionClasses['bottom-right']
         }`}
-        style={{ opacity: config.opacity ?? 0.85 }}
+        style={{
+          opacity: config.opacity ?? 0.85,
+          transform: userScale !== 1 ? `scale(${userScale})` : undefined,
+          transformOrigin: getTransformOrigin(config.position),
+        }}
       >
         <div className="flex flex-col gap-2 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/15 shadow-2xl shadow-black/90 text-white select-none">
           

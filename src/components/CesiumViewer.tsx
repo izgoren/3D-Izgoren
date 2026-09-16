@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   BaseMapType,
   CameraState,
@@ -46,14 +46,12 @@ function renderWatermarkToCanvas(
 ) {
   if (!config.visible) return;
 
-  // Proportional watermark scaling according to recording / video dimensions
+  // Proportional watermark scaling according to recording / video dimensions & user watermark scale
   const isPortrait = height > width;
   const baseDim = isPortrait ? width : Math.min(width, height);
-  // Standard 1080p landscape (1920x1080): baseDim = 1080 -> scale = 1.05
-  // Standard 9:16 vertical reels (1080x1920): baseDim = 1080 -> scale = 1.14
-  // 4K (3840x2160): baseDim = 2160 -> scale = 2.15
-  // Mobile recording/preview: baseDim = ~400 -> scale = 0.58
-  const scale = Math.max(0.55, Math.min(2.5, baseDim / 950));
+  const userScale = typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1.0;
+  // 1080p base scale factor with user custom scaling
+  const scale = Math.max(0.4, Math.min(3.5, (baseDim / 950) * userScale));
   const cardW = Math.min(345 * scale, width - 24 * scale);
   const cardH = 136 * scale;
   const margin = Math.max(10, 18 * scale);
@@ -387,6 +385,34 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
 
+  // Synchronized refs to decouple metadata updates (watermark) from 3D map engine lifecycle
+  const activeParcelRef = useRef<ParcelInfo | null>(activeParcel);
+  const watermarkConfigRef = useRef<WatermarkConfig>(watermarkConfig);
+  const onCameraChangeRef = useRef(onCameraChange);
+  const baseMapRef = useRef<BaseMapType>(baseMap);
+  const isTerrainActiveRef = useRef<boolean>(isTerrainActive);
+  const lastRenderedCoordsKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    activeParcelRef.current = activeParcel;
+  }, [activeParcel]);
+
+  useEffect(() => {
+    watermarkConfigRef.current = watermarkConfig;
+  }, [watermarkConfig]);
+
+  useEffect(() => {
+    onCameraChangeRef.current = onCameraChange;
+  }, [onCameraChange]);
+
+  useEffect(() => {
+    baseMapRef.current = baseMap;
+  }, [baseMap]);
+
+  useEffect(() => {
+    isTerrainActiveRef.current = isTerrainActive;
+  }, [isTerrainActive]);
+
   const [isCesiumReady, setIsCesiumReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -543,10 +569,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const centerOnParcel = useCallback(
     (duration: number = 1.4) => {
       const viewer = viewerRef.current;
-      if (!viewer || typeof Cesium === 'undefined' || !activeParcel || activeParcel.coordinates.length < 3) return;
+      const targetParcel = activeParcelRef.current;
+      if (!viewer || typeof Cesium === 'undefined' || !targetParcel || !targetParcel.coordinates || targetParcel.coordinates.length < 3) return;
 
       try {
-        const coords = activeParcel.coordinates;
+        const coords = targetParcel.coordinates;
         let sumLng = 0;
         let sumLat = 0;
         coords.forEach((c) => {
@@ -558,7 +585,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
         // Query real terrain elevation if 3D terrain is active
         let terrainHeight = 0;
-        if (viewer.scene.globe && isTerrainActive) {
+        if (viewer.scene.globe && isTerrainActiveRef.current) {
           const carto = Cesium.Cartographic.fromDegrees(centerLng, centerLat);
           const globeHeight = viewer.scene.globe.getHeight(carto);
           if (typeof globeHeight === 'number' && !isNaN(globeHeight) && globeHeight > -200) {
@@ -577,7 +604,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const radius = boundingSphere.radius || 150;
         const optimalRange = Math.max(280, Math.min(4500, Math.round(radius * 3.2)));
         rangeRef.current = optimalRange;
-        onCameraChange({ range: optimalRange });
+        onCameraChangeRef.current({ range: optimalRange });
 
         // Smoothly fly camera to center parcel on 3D terrain
         const targetSphere = new Cesium.BoundingSphere(centerCartesian, radius);
@@ -601,7 +628,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         } catch (ignored) {}
       }
     },
-    [activeParcel, isTerrainActive, onCameraChange]
+    []
   );
 
   // Initialize Cesium
@@ -705,7 +732,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           if (isTouringRef.current && parcelCenterRef.current) {
             const nextHeading = (headingRef.current + tourSpeedRef.current) % 360;
             headingRef.current = nextHeading;
-            onCameraChange({ heading: Math.round(nextHeading * 10) / 10 });
+            onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
             updateCameraView();
           }
         };
@@ -723,12 +750,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer'
               );
               terrainProviderRef.current = terrain;
-              if (viewerRef.current && !viewerRef.current.isDestroyed() && isTerrainActive) {
+              if (viewerRef.current && !viewerRef.current.isDestroyed() && isTerrainActiveRef.current) {
                 viewerRef.current.terrainProvider = terrain;
                 viewerRef.current.scene.globe.depthTestAgainstTerrain = true;
                 viewerRef.current.scene.globe.terrainExaggeration = 1.8;
                 // Sadece aktif parsel varsa parseli ortala
-                if (activeParcel && activeParcel.coordinates.length >= 3) {
+                if (activeParcelRef.current && activeParcelRef.current.coordinates.length >= 3) {
                   setTimeout(() => {
                     centerOnParcel(1.2);
                   }, 350);
@@ -766,7 +793,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }
       }
     };
-  }, [getProvider, onCameraChange, updateCameraView, centerOnParcel]);
+  }, [getProvider, updateCameraView, centerOnParcel]);
 
   // Dynamic ResizeObserver for seamless screen size adjustments & window resizing
   useEffect(() => {
@@ -799,7 +826,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       }
 
       // 3D arazi açıldığında veya kapandığında parseli arazi yüksekliğine göre tam ortala
-      if (activeParcel && activeParcel.coordinates.length >= 3) {
+      if (activeParcelRef.current && activeParcelRef.current.coordinates.length >= 3) {
         setTimeout(() => {
           centerOnParcel(1.2);
         }, 200);
@@ -807,7 +834,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     } catch (e) {
       console.warn('Terrain toggle error:', e);
     }
-  }, [isTerrainActive, activeParcel, centerOnParcel]);
+  }, [isTerrainActive, centerOnParcel]);
 
   // Handle Base Map Change
   useEffect(() => {
@@ -832,10 +859,23 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [cameraState.pitch, cameraState.heading, cameraState.range, cameraState.isTouring, updateCameraView]);
 
-  // Draw 3D Parcel with Water Flow Animation (Başlangıç/Bitiş kaldırıldı, su akışı uygulandı)
+  // Geometry fingerprint of the parcel (changes ONLY when actual boundary coordinates change)
+  const parcelGeometryKey = useMemo(() => {
+    if (!activeParcel || !activeParcel.coordinates || activeParcel.coordinates.length < 3) return '';
+    const coords = activeParcel.coordinates;
+    const len = coords.length;
+    const first = coords[0];
+    const last = coords[len - 1];
+    return `${activeParcel.id || 'p'}_${len}_${first.lng.toFixed(6)}_${first.lat.toFixed(6)}_${last.lng.toFixed(6)}_${last.lat.toFixed(6)}`;
+  }, [activeParcel?.id, activeParcel?.coordinates]);
+
+  // Draw 3D Parcel with Water Flow Animation
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer || typeof Cesium === 'undefined') return;
+
+    // Check if boundary geometry actually changed (new file upload or sample parcel)
+    const isNewGeometry = lastRenderedCoordsKeyRef.current !== parcelGeometryKey;
 
     // Clear previous entities
     if (parcelEntitiesRef.current.length > 0) {
@@ -843,7 +883,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       parcelEntitiesRef.current = [];
     }
 
-    if (!activeParcel || activeParcel.coordinates.length < 3) return;
+    if (!parcelGeometryKey || !activeParcel || activeParcel.coordinates.length < 3) {
+      lastRenderedCoordsKeyRef.current = '';
+      return;
+    }
 
     try {
       const coords = activeParcel.coordinates;
@@ -876,7 +919,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
       // 1. Base 3D Polygon & Polyline
       const mainEntity = viewer.entities.add({
-        name: activeParcel.name,
+        name: activeParcel.name || 'Parsel',
         polyline: {
           positions: cartesianPoints,
           width: parcelStyle.borderWidth,
@@ -902,7 +945,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       if (parcelStyle.animateLine) {
         // Birincil Su Akışı Dalgası
         const waterWaveEntity1 = viewer.entities.add({
-          name: `${activeParcel.name} - Su Akışı 1`,
+          name: `${activeParcel.name || 'Parsel'} - Su Akışı 1`,
           polyline: {
             positions: new Cesium.CallbackProperty(() => {
               // 3.2 saniyelik pürüzsüz sürekli su döngüsü
@@ -921,7 +964,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
         // İkincil Karşıt Su Dalgası (Kesintisiz çift su dalgası görünümü)
         const waterWaveEntity2 = viewer.entities.add({
-          name: `${activeParcel.name} - Su Akışı 2`,
+          name: `${activeParcel.name || 'Parsel'} - Su Akışı 2`,
           polyline: {
             positions: new Cesium.CallbackProperty(() => {
               const t = ((Date.now() + 1600) % 3200) / 3200;
@@ -939,13 +982,17 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       }
 
       parcelEntitiesRef.current = createdEntities;
+      lastRenderedCoordsKeyRef.current = parcelGeometryKey;
 
-      // 3D arazi aktifte veya düz zeminde parseli tam ortala
-      centerOnParcel(1.4);
+      // SADECE ve SADECE YENİ BİR PARSEL YÜKLENDİĞİNDE KAMERAYI ODAKLA
+      // İl, ilçe, ada, parsel, fiyat gibi parsel ekranındaki metin değişikliklerinde kamerayı asla oynatma ve altlık haritayı yenileme!
+      if (isNewGeometry) {
+        centerOnParcel(1.4);
+      }
     } catch (err) {
       console.error('Parcel render error:', err);
     }
-  }, [activeParcel, parcelStyle, centerOnParcel]);
+  }, [parcelGeometryKey, parcelStyle, centerOnParcel]);
 
   // Handle format change & trigger resize
   useEffect(() => {
@@ -973,7 +1020,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     };
   }, [isRecording]);
 
-  // Snapshot action with Watermark Burned-in
+  // Snapshot action with Watermark Burned-in at 1080p Full HD
   const takeSnapshot = useCallback(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -982,38 +1029,72 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       viewer.render();
       const canvas = viewer.canvas;
 
+      // Ensure Full HD (1080p) minimum resolution for snapshots based on format
+      let targetW = 1920;
+      let targetH = 1080;
+      switch (videoFormat) {
+        case 'reels':
+          targetW = 1080;
+          targetH = 1920;
+          break;
+        case 'post':
+          targetW = 1080;
+          targetH = 1080;
+          break;
+        case 'portrait':
+          targetW = 1080;
+          targetH = 1350;
+          break;
+        case 'youtube':
+        default:
+          targetW = 1920;
+          targetH = 1080;
+          break;
+      }
+
+      const snapW = Math.max(targetW, canvas.width);
+      const snapH = Math.round(snapW * (targetH / targetW));
+
       // Create composite canvas with watermark burned directly onto the image
       const offscreen = document.createElement('canvas');
-      offscreen.width = canvas.width;
-      offscreen.height = canvas.height;
+      offscreen.width = snapW;
+      offscreen.height = snapH;
       const ctx = offscreen.getContext('2d');
       if (!ctx) return;
 
-      // 1. Draw 3D Earth canvas
-      ctx.drawImage(canvas, 0, 0, offscreen.width, offscreen.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // 1. Draw 3D Earth canvas with center-cover to avoid stretching
+      const coverScale = Math.max(offscreen.width / canvas.width, offscreen.height / canvas.height);
+      const drawW = canvas.width * coverScale;
+      const drawH = canvas.height * coverScale;
+      const drawX = (offscreen.width - drawW) / 2;
+      const drawY = (offscreen.height - drawH) / 2;
+      ctx.drawImage(canvas, drawX, drawY, drawW, drawH);
 
       // 2. Burn Watermark onto Image
       renderWatermarkToCanvas(
         ctx,
         offscreen.width,
         offscreen.height,
-        watermarkConfig,
-        activeParcel,
+        watermarkConfigRef.current,
+        activeParcelRef.current,
         logoImageRef.current
       );
 
       const dataUrl = offscreen.toDataURL('image/png');
       const link = document.createElement('a');
-      link.download = `parsel_goruntusu_${Date.now()}.png`;
+      link.download = `parsel_1080p_goruntu_${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
     } catch (e) {
       console.error('Screenshot capture failed:', e);
       alert('Ekran görüntüsü alınamadı. Tarayıcı izinlerini kontrol ediniz.');
     }
-  }, [watermarkConfig, activeParcel]);
+  }, [videoFormat]);
 
-  // Start Video Recording with Watermark Burned-in directly into the MP4 video!
+  // Start Video Recording with Watermark Burned-in directly into 1080p Full HD MP4 video!
   const startVideoRecording = useCallback(async (): Promise<boolean> => {
     const viewer = viewerRef.current;
     if (!viewer) return false;
@@ -1021,29 +1102,65 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     try {
       const viewerCanvas = viewer.canvas;
 
-      // Create offscreen composite canvas for recording
+      // 1080p Full HD Resolution Sizing according to selected Aspect Ratio
+      let targetW = 1920;
+      let targetH = 1080;
+      switch (videoFormat) {
+        case 'reels':
+          // 9:16 Full HD
+          targetW = 1080;
+          targetH = 1920;
+          break;
+        case 'post':
+          // 1:1 Full HD
+          targetW = 1080;
+          targetH = 1080;
+          break;
+        case 'portrait':
+          // 4:5 Full HD
+          targetW = 1080;
+          targetH = 1350;
+          break;
+        case 'youtube':
+        default:
+          // 16:9 Full HD
+          targetW = 1920;
+          targetH = 1080;
+          break;
+      }
+
+      // Create offscreen composite canvas strictly at 1080p resolution
       const recordCanvas = document.createElement('canvas');
-      recordCanvas.width = viewerCanvas.width;
-      recordCanvas.height = viewerCanvas.height;
+      recordCanvas.width = targetW;
+      recordCanvas.height = targetH;
       const recordCtx = recordCanvas.getContext('2d');
       if (!recordCtx) return false;
 
+      recordCtx.imageSmoothingEnabled = true;
+      recordCtx.imageSmoothingQuality = 'high';
+
       isRecordingRef.current = true;
 
-      // Frame rendering loop: Burns 3D globe + Watermark together at 30fps
+      // Frame rendering loop: Burns 3D globe + Watermark together at 1080p 30fps
       const renderFrame = () => {
         if (!isRecordingRef.current) return;
 
-        // 1. Paint 3D WebGL Canvas
-        recordCtx.drawImage(viewerCanvas, 0, 0, recordCanvas.width, recordCanvas.height);
+        // 1. Paint 3D WebGL Canvas with proportional cover scaling
+        const coverScale = Math.max(recordCanvas.width / viewerCanvas.width, recordCanvas.height / viewerCanvas.height);
+        const drawW = viewerCanvas.width * coverScale;
+        const drawH = viewerCanvas.height * coverScale;
+        const drawX = (recordCanvas.width - drawW) / 2;
+        const drawY = (recordCanvas.height - drawH) / 2;
 
-        // 2. Paint Watermark with active settings
+        recordCtx.drawImage(viewerCanvas, drawX, drawY, drawW, drawH);
+
+        // 2. Paint Watermark with active settings at 1080p scale
         renderWatermarkToCanvas(
           recordCtx,
           recordCanvas.width,
           recordCanvas.height,
-          watermarkConfig,
-          activeParcel,
+          watermarkConfigRef.current,
+          activeParcelRef.current,
           logoImageRef.current
         );
 
@@ -1053,7 +1170,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       // Start loop
       animFrameIdRef.current = requestAnimationFrame(renderFrame);
 
-      // Capture 30 FPS stream from composite canvas
+      // Capture 30 FPS stream from 1080p composite canvas
       const stream = recordCanvas.captureStream(30);
 
       // MP4 priority
@@ -1075,9 +1192,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }
       }
 
+      // 12 Mbps bitrate for crystal-clear 1080p Full HD video recording
       const recorder = new MediaRecorder(stream, {
         mimeType: selectedMimeType || undefined,
-        videoBitsPerSecond: 8000000,
+        videoBitsPerSecond: 12000000,
       });
 
       recordedChunksRef.current = [];
@@ -1103,7 +1221,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        a.download = `parsel_3d_video_${Date.now()}.mp4`;
+        a.download = `parsel_1080p_video_${Date.now()}.mp4`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
@@ -1122,7 +1240,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       alert('Video kaydı başlatılamadı: ' + (err.message || 'Hata'));
       return false;
     }
-  }, [watermarkConfig, activeParcel]);
+  }, [watermarkConfig, activeParcel, videoFormat]);
 
   const stopVideoRecording = useCallback(() => {
     isRecordingRef.current = false;
@@ -1270,30 +1388,54 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [onViewerReady, takeSnapshot, startVideoRecording, stopVideoRecording, isRecording, flyToParcel, flyToDeviceLocation]);
 
+  // Responsive device checks
+  const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 640;
+  const isTabletScreen = typeof window !== 'undefined' && window.innerWidth >= 640 && window.innerWidth < 1024;
+
   // Aspect ratio classes for container
   const getFormatClasses = () => {
+    const isFull = (screenHeightPercent ?? 100) >= 99;
+
+    // On mobile phone in reels or full-screen mode, provide edge-to-edge native display
+    if (isMobileScreen && (isFull || videoFormat === 'reels')) {
+      return 'w-full h-full rounded-none border-none shadow-none';
+    }
+
     switch (videoFormat) {
       case 'reels':
-        return 'aspect-[9/16] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
+        return isFull && isMobileScreen
+          ? 'w-full h-full rounded-none border-none'
+          : 'aspect-[9/16] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
       case 'post':
         return 'aspect-square rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
       case 'portrait':
         return 'aspect-[4/5] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
       case 'youtube':
       default:
-        return (screenHeightPercent ?? 100) >= 99
+        return isFull
           ? 'w-full h-full rounded-none border-none'
           : 'aspect-[16/9] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
     }
   };
 
-  // Dynamic height & sizing based on screenHeightPercent
+  // Dynamic height & sizing based on screenHeightPercent and device
   const getFormatStyle = (): React.CSSProperties => {
     const scale = Math.max(0.45, Math.min(1.0, (screenHeightPercent ?? 100) / 100));
+    const isFull = (screenHeightPercent ?? 100) >= 99;
+
+    // On mobile phone, seamlessly fill display when full height or in reels mode
+    if (isMobileScreen && (isFull || videoFormat === 'reels')) {
+      return {
+        width: '100%',
+        height: '100%',
+        maxHeight: '100vh',
+        maxWidth: '100vw',
+      };
+    }
 
     switch (videoFormat) {
       case 'reels': {
-        const maxH = Math.min(840, Math.round(window.innerHeight * 0.88 * scale));
+        const maxH = Math.min(960, Math.round(window.innerHeight * (isFull ? 1.0 : 0.88 * scale)));
         return {
           height: `${maxH}px`,
           maxHeight: `${maxH}px`,
@@ -1302,7 +1444,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         };
       }
       case 'post': {
-        const maxH = Math.min(680, Math.round(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.84) * scale));
+        const maxH = Math.min(760, Math.round(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.84) * scale));
         return {
           height: `${maxH}px`,
           maxHeight: `${maxH}px`,
@@ -1311,7 +1453,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         };
       }
       case 'portrait': {
-        const maxH = Math.min(740, Math.round(window.innerHeight * 0.86 * scale));
+        const maxH = Math.min(840, Math.round(window.innerHeight * 0.86 * scale));
         return {
           height: `${maxH}px`,
           maxHeight: `${maxH}px`,
@@ -1321,7 +1463,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       }
       case 'youtube':
       default: {
-        if (scale >= 0.99) {
+        if (isFull) {
           return {
             width: '100%',
             height: '100%',
@@ -1345,8 +1487,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const isEdgeToEdge = (screenHeightPercent ?? 100) >= 99 && (isMobileScreen || videoFormat === 'youtube');
+
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-neutral-950 flex items-center justify-center p-1 sm:p-2">
+    <div className={`relative w-full h-screen overflow-hidden bg-neutral-950 flex items-center justify-center ${isEdgeToEdge ? 'p-0' : 'p-1 sm:p-2'}`}>
       {/* 3D Canvas Box (Responsive Kadraj & Dinamik Ekran Boyu) */}
       <div
         id="cesiumContainer"
