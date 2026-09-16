@@ -33,6 +33,10 @@ import {
   X,
   Menu,
   Map,
+  Save,
+  BookmarkCheck,
+  RotateCcw,
+  Scaling,
 } from 'lucide-react';
 import {
   BaseMapType,
@@ -46,6 +50,12 @@ import { parseKMLString, parseKMZFile, parseGeoJSON, formatArea } from '../utils
 import { DEFAULT_PARCEL } from '../data/demoParcels';
 import { ViewerMethods } from './CesiumViewer';
 import { PWAInstallButton } from './PWAInstallButton';
+import {
+  saveDefaultCompanyInfo,
+  loadDefaultCompanyInfo,
+  hasSavedDefaultCompanyInfo,
+  clearDefaultCompanyInfo,
+} from '../utils/watermarkStorage';
 
 interface ControlPanelProps {
   baseMap: BaseMapType;
@@ -64,9 +74,13 @@ interface ControlPanelProps {
   isTerrainActive: boolean;
   onToggleTerrain: () => void;
   viewerMethods: ViewerMethods | null;
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
+  screenHeightPercent: number;
+  onScreenHeightPercentChange: (percent: number) => void;
 }
 
-type TabType = 'map' | 'camera' | 'parcel' | 'style' | 'watermark' | 'export';
+type TabType = 'camera' | 'parcel' | 'style' | 'watermark' | 'export';
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   baseMap,
@@ -85,16 +99,82 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   isTerrainActive,
   onToggleTerrain,
   viewerMethods,
+  isOpen,
+  onToggleOpen,
+  screenHeightPercent,
+  onScreenHeightPercentChange,
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(() => {
+  const [internalCollapsed, setInternalCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 768;
     }
     return false;
   });
-  const [activeTab, setActiveTab] = useState<TabType>('map');
+
+  const isCollapsed = isOpen !== undefined ? !isOpen : internalCollapsed;
+  const setIsCollapsed = (collapsed: boolean) => {
+    if (onToggleOpen && isOpen !== undefined) {
+      if (collapsed === isOpen) {
+        onToggleOpen();
+      }
+    } else {
+      setInternalCollapsed(collapsed);
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>('camera');
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const [hasSavedDefaults, setHasSavedDefaults] = useState<boolean>(() => hasSavedDefaultCompanyInfo());
+  const [defaultSaveFeedback, setDefaultSaveFeedback] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  const handleSaveDefaultWatermark = () => {
+    const success = saveDefaultCompanyInfo(watermarkConfig);
+    if (success) {
+      setHasSavedDefaults(true);
+      setDefaultSaveFeedback({
+        message: 'Firma bilgileri başarıyla varsayılan olarak kaydedildi! Her açılışta otomatik yüklenecektir.',
+      });
+      setTimeout(() => setDefaultSaveFeedback(null), 5000);
+    } else {
+      setDefaultSaveFeedback({
+        message: 'Kayıt sırasında bir hata oluştu.',
+        isError: true,
+      });
+      setTimeout(() => setDefaultSaveFeedback(null), 5000);
+    }
+  };
+
+  const handleRestoreDefaultWatermark = () => {
+    const saved = loadDefaultCompanyInfo();
+    if (saved) {
+      onWatermarkChange({
+        companyName: saved.companyName ?? watermarkConfig.companyName,
+        phone: saved.phone ?? watermarkConfig.phone,
+        web: saved.web ?? watermarkConfig.web,
+        priceTag: saved.priceTag ?? watermarkConfig.priceTag,
+        logoUrl: saved.logoUrl ?? watermarkConfig.logoUrl,
+        position: saved.position ?? watermarkConfig.position,
+        adaParselPosition: saved.adaParselPosition ?? watermarkConfig.adaParselPosition,
+        opacity: saved.opacity ?? watermarkConfig.opacity,
+        showLocationBadge: saved.showLocationBadge ?? watermarkConfig.showLocationBadge,
+      });
+      setDefaultSaveFeedback({
+        message: 'Kayıtlı varsayılan firma bilgileri geri yüklendi.',
+      });
+      setTimeout(() => setDefaultSaveFeedback(null), 4000);
+    }
+  };
+
+  const handleClearDefaultWatermark = () => {
+    clearDefaultCompanyInfo();
+    setHasSavedDefaults(false);
+    setDefaultSaveFeedback({
+      message: 'Varsayılan firma kayıtları temizlendi.',
+    });
+    setTimeout(() => setDefaultSaveFeedback(null), 4000);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -183,26 +263,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   return (
     <>
-      {/* Left Tab Handle: Visible when panel is collapsed (ideal for phone & tablet) */}
-      {isCollapsed && (
-        <button
-          onClick={() => setIsCollapsed(false)}
-          className="fixed left-0 top-16 sm:top-20 z-40 flex items-center gap-2 pl-3 pr-3.5 py-2.5 rounded-r-2xl bg-slate-950/95 hover:bg-slate-900 backdrop-blur-2xl border-y border-r border-sky-400/40 shadow-2xl shadow-black text-white active:scale-95 transition group cursor-pointer animate-in fade-in slide-in-from-left-4 duration-300"
-          title="3D Parsel Studio Menüsünü Aç"
-        >
-          <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/50 flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-slate-950 transition">
-            <Compass className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col items-start text-left">
-            <span className="text-[11px] font-bold text-white tracking-wide uppercase flex items-center gap-1">
-              3D Parsel Studio
-              <ChevronRight className="w-3.5 h-3.5 text-sky-400 group-hover:translate-x-0.5 transition" />
-            </span>
-            <span className="text-[9px] text-slate-400 font-mono">Araçlar & Ayarlar</span>
-          </div>
-        </button>
-      )}
-
       {/* Mobile Floating Action Dock (Visible only on mobile when panel is collapsed) */}
       {isCollapsed && (
         <div className="sm:hidden fixed bottom-4 inset-x-3 z-40 flex items-center justify-between p-2 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black">
@@ -322,18 +382,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           {/* Navigation Tabs with comfortable touch targets */}
           <div className="flex items-center border-b border-white/10 bg-slate-950/80 p-1.5 gap-1 overflow-x-auto scrollbar-none shrink-0">
             <button
-              onClick={() => setActiveTab('map')}
-              className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'map'
-                  ? 'bg-sky-500 text-slate-950 font-bold shadow'
-                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Harita</span>
-            </button>
-
-            <button
               onClick={() => setActiveTab('camera')}
               className={`flex-1 min-w-[50px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-medium flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === 'camera'
@@ -397,258 +445,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           {/* Tab Contents - Scrollable with comfortable touch padding */}
           <div className="flex-1 p-4 overflow-y-auto overscroll-contain space-y-4 text-xs">
             
-            {/* TAB 1: HARİTA & KADRAJ */}
-            {activeTab === 'map' && (
-              <div className="space-y-4">
-                {/* Altlık Harita Seçenekleri: Google Hibrit, Google Saf, Yandex Hibrit, Yandex Saf */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">
-                      Altlık Harita Katmanı
-                    </label>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                      ⚡ Yüksek Çözünürlük
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {/* Google Hibrit */}
-                    <button
-                      type="button"
-                      onClick={() => onBaseMapChange('google_hybrid')}
-                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                        baseMap === 'google_hybrid'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          baseMap === 'google_hybrid' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
-                        }`}
-                      >
-                        <Globe className="w-4 h-4" />
-                      </div>
-                      <div className="text-left overflow-hidden">
-                        <div className="text-xs font-bold leading-tight flex items-center gap-1">
-                          <span>Google Hibrit</span>
-                        </div>
-                        <div
-                          className={`text-[10px] leading-tight truncate ${
-                            baseMap === 'google_hybrid' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                          }`}
-                        >
-                          Uydu + Yol & İsimler
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Google Saf */}
-                    <button
-                      type="button"
-                      onClick={() => onBaseMapChange('google_satellite')}
-                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                        baseMap === 'google_satellite'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          baseMap === 'google_satellite' ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
-                        }`}
-                      >
-                        <Sparkles className="w-4 h-4" />
-                      </div>
-                      <div className="text-left overflow-hidden">
-                        <div className="text-xs font-bold leading-tight flex items-center gap-1">
-                          <span>Google Saf</span>
-                        </div>
-                        <div
-                          className={`text-[10px] leading-tight truncate ${
-                            baseMap === 'google_satellite' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                          }`}
-                        >
-                          Saf Net Uydu
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Yandex Hibrit */}
-                    <button
-                      type="button"
-                      onClick={() => onBaseMapChange('yandex_hybrid')}
-                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                        baseMap === 'yandex_hybrid'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          baseMap === 'yandex_hybrid' ? 'bg-slate-950/20 text-slate-950' : 'bg-amber-500/20 text-amber-400'
-                        }`}
-                      >
-                        <Map className="w-4 h-4" />
-                      </div>
-                      <div className="text-left overflow-hidden">
-                        <div className="text-xs font-bold leading-tight">Yandex Hibrit</div>
-                        <div
-                          className={`text-[10px] leading-tight truncate ${
-                            baseMap === 'yandex_hybrid' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                          }`}
-                        >
-                          Yol & Yer İsimleri
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Yandex Saf */}
-                    <button
-                      type="button"
-                      onClick={() => onBaseMapChange('yandex_satellite')}
-                      className={`p-3 rounded-xl border flex items-center gap-2.5 font-medium transition min-h-[52px] active:scale-98 cursor-pointer ${
-                        baseMap === 'yandex_satellite'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          baseMap === 'yandex_satellite' ? 'bg-slate-950/20 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                        }`}
-                      >
-                        <Layers className="w-4 h-4" />
-                      </div>
-                      <div className="text-left overflow-hidden">
-                        <div className="text-xs font-bold leading-tight">Yandex Saf</div>
-                        <div
-                          className={`text-[10px] leading-tight truncate ${
-                            baseMap === 'yandex_satellite' ? 'text-slate-900/90 font-medium' : 'text-slate-400'
-                          }`}
-                        >
-                          Saf Yandex Net Uydu
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* HD Çözünürlük Bilgi Notu */}
-                  <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-sky-950/40 border border-sky-400/20 flex items-center justify-between text-[10px] text-sky-300">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                      Yüksek Çözünürlük (Retina & WebGL) Aktif
-                    </span>
-                    <span className="font-mono text-[9px] text-sky-400/80">Net Uydu</span>
-                  </div>
-
-                  {/* GPS Konumuma Odaklan Butonu */}
-                  <button
-                    type="button"
-                    onClick={() => viewerMethods?.flyToDeviceLocation()}
-                    className="w-full mt-2.5 p-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 text-sky-300 font-semibold flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer shadow-lg"
-                  >
-                    <LocateFixed className="w-4 h-4 text-sky-400" />
-                    <span>📍 Telefon / Tablet GPS Konumuna Git</span>
-                  </button>
-                </div>
-
-                  {/* 3D Arazi & Gerçekçi Kabartma Aktif / Pasif */}
-                  <div
-                    className={`p-3 rounded-xl border transition-all ${
-                      isTerrainActive
-                        ? 'bg-gradient-to-br from-emerald-500/15 to-teal-500/10 border-emerald-500/40 shadow-lg shadow-emerald-950/20'
-                        : 'bg-white/5 border-white/10'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                        <Mountain className={`w-4 h-4 ${isTerrainActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-                        3D Arazi Topoğrafyası & Kabartma
-                      </span>
-                      <button
-                        type="button"
-                        onClick={onToggleTerrain}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                          isTerrainActive
-                            ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
-                            : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                        }`}
-                      >
-                        {isTerrainActive ? 'AKTİF' : 'PASİF'}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-300 leading-relaxed">
-                      {isTerrainActive
-                        ? 'ArcGIS 3D Yükseklik modeli aktif. Dağlar, yamaçlar ve vadiler 1.8x gerçekçi topoğrafik kabartma ve güneş derinliğiyle 3D modelleniyor.'
-                        : 'Kabartma kapalı (Düz zemin modu). Topoğrafik eğim ve yükseltiler devre dışı.'}
-                    </p>
-                  </div>
-
-                {/* Video Kadrajı Formatı */}
-                <div className="pt-3 border-t border-white/10">
-                  <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mb-2 block">
-                    Video Kadraj Oranı
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => onVideoFormatChange('reels')}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition ${
-                        videoFormat === 'reels'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="text-[11px] font-semibold">9:16 Reels / Shorts</span>
-                      <span className="text-[10px] opacity-75 font-mono">405 × 720</span>
-                    </button>
-
-                    <button
-                      onClick={() => onVideoFormatChange('post')}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition ${
-                        videoFormat === 'post'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="text-[11px] font-semibold">1:1 Gönderi</span>
-                      <span className="text-[10px] opacity-75 font-mono">600 × 600</span>
-                    </button>
-
-                    <button
-                      onClick={() => onVideoFormatChange('portrait')}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition ${
-                        videoFormat === 'portrait'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="text-[11px] font-semibold">4:5 Portre Feed</span>
-                      <span className="text-[10px] opacity-75 font-mono">480 × 600</span>
-                    </button>
-
-                    <button
-                      onClick={() => onVideoFormatChange('youtube')}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition ${
-                        videoFormat === 'youtube'
-                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
-                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="text-[11px] font-semibold">16:9 Full Screen</span>
-                      <span className="text-[10px] opacity-75 font-mono">YouTube & TV</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: 3D KAMERA & SİNEMATİK TUR */}
+            {/* TAB: 3D TUR & HARİTA */}
             {activeTab === 'camera' && (
               <div className="space-y-4">
                 {/* 3D Cinematic Tour Main Button */}
                 <button
                   onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
-                  className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg ${
+                  className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg cursor-pointer active:scale-98 ${
                     cameraState.isTouring
                       ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-500/30'
                       : 'bg-gradient-to-r from-sky-500 to-blue-600 text-slate-950 shadow-sky-500/30'
@@ -666,6 +469,220 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     </>
                   )}
                 </button>
+
+                {/* Altlık Harita Katmanları (Google & Esri - Yandex Kaldırıldı) */}
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Altlık Harita Katmanı</span>
+                    </label>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      ⚡ Yüksek Çözünürlük
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {/* Google Hibrit */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('google_hybrid')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 font-medium transition cursor-pointer active:scale-98 ${
+                        baseMap === 'google_hybrid'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <Globe className="w-4 h-4" />
+                      <span className="text-xs">Google Hibrit</span>
+                      <span className={`text-[9px] truncate ${baseMap === 'google_hybrid' ? 'text-slate-950/80 font-semibold' : 'text-slate-400'}`}>
+                        Uydu + Yol & İsim
+                      </span>
+                    </button>
+
+                    {/* Google Saf */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('google_satellite')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 font-medium transition cursor-pointer active:scale-98 ${
+                        baseMap === 'google_satellite'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span className="text-xs">Google Saf</span>
+                      <span className={`text-[9px] truncate ${baseMap === 'google_satellite' ? 'text-slate-950/80 font-semibold' : 'text-slate-400'}`}>
+                        Net Saf Uydu
+                      </span>
+                    </button>
+
+                    {/* Esri Saf Uydu */}
+                    <button
+                      type="button"
+                      onClick={() => onBaseMapChange('esri_satellite')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 font-medium transition cursor-pointer active:scale-98 ${
+                        baseMap === 'esri_satellite'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <Map className="w-4 h-4" />
+                      <span className="text-xs">Esri Uydu</span>
+                      <span className={`text-[9px] truncate ${baseMap === 'esri_satellite' ? 'text-slate-950/80 font-semibold' : 'text-slate-400'}`}>
+                        ArcGIS HD
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* GPS Konum Butonu */}
+                  <button
+                    type="button"
+                    onClick={() => viewerMethods?.flyToDeviceLocation()}
+                    className="w-full mt-1 p-2 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-sky-300 font-semibold flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer"
+                  >
+                    <LocateFixed className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="text-[11px]">📍 GPS Cihaz Konumuna Git</span>
+                  </button>
+                </div>
+
+                {/* 3D Arazi & Gerçekçi Kabartma */}
+                <div
+                  className={`p-3 rounded-xl border transition-all ${
+                    isTerrainActive
+                      ? 'bg-gradient-to-br from-emerald-500/15 to-teal-500/10 border-emerald-500/40 shadow-lg shadow-emerald-950/20'
+                      : 'bg-white/5 border-white/10'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                      <Mountain className={`w-4 h-4 ${isTerrainActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                      3D Arazi Topoğrafyası & Kabartma
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onToggleTerrain}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                        isTerrainActive
+                          ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
+                          : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                      }`}
+                    >
+                      {isTerrainActive ? 'AKTİF' : 'PASİF'}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    {isTerrainActive
+                      ? 'ArcGIS 3D Yükseklik modeli aktif. Dağlar, yamaçlar ve vadiler 1.8x gerçekçi topoğrafik kabartma ile 3D modelleniyor.'
+                      : 'Kabartma kapalı (Düz zemin modu). Topoğrafik eğim ve yükseltiler devre dışı.'}
+                  </p>
+                </div>
+
+                {/* Video Kadrajı Formatı */}
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                  <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider block">
+                    Video Kadraj Oranı
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => onVideoFormatChange('reels')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition cursor-pointer active:scale-98 ${
+                        videoFormat === 'reels'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold">9:16 Reels / Shorts</span>
+                      <span className="text-[10px] opacity-75 font-mono">405 × 720</span>
+                    </button>
+
+                    <button
+                      onClick={() => onVideoFormatChange('post')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition cursor-pointer active:scale-98 ${
+                        videoFormat === 'post'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold">1:1 Gönderi</span>
+                      <span className="text-[10px] opacity-75 font-mono">600 × 600</span>
+                    </button>
+
+                    <button
+                      onClick={() => onVideoFormatChange('portrait')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition cursor-pointer active:scale-98 ${
+                        videoFormat === 'portrait'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold">4:5 Portre Feed</span>
+                      <span className="text-[10px] opacity-75 font-mono">480 × 600</span>
+                    </button>
+
+                    <button
+                      onClick={() => onVideoFormatChange('youtube')}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition cursor-pointer active:scale-98 ${
+                        videoFormat === 'youtube'
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold">16:9 Full Screen</span>
+                      <span className="text-[10px] opacity-75 font-mono">YouTube & TV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ekran Boyu & Kadraj Yüksekliği Ayarı */}
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Scaling className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Ekran Boyu & Kadraj Yüksekliği</span>
+                    </label>
+                    <span className="font-mono font-bold text-xs text-sky-300 px-2 py-0.5 rounded-md bg-sky-500/20 border border-sky-400/30">
+                      %{screenHeightPercent}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Harita ve video kadrajının dikey boyutunu ve ekranı kaplama oranını ayarlayın.
+                  </p>
+
+                  <input
+                    type="range"
+                    min="50"
+                    max="100"
+                    step="5"
+                    value={screenHeightPercent}
+                    onChange={(e) => onScreenHeightPercentChange(parseInt(e.target.value, 10))}
+                    className="w-full accent-sky-400 cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                  />
+
+                  <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                    {[
+                      { val: 100, label: 'Tam Ekran', sub: '%100' },
+                      { val: 90, label: 'Geniş', sub: '%90' },
+                      { val: 80, label: 'Standart', sub: '%80' },
+                      { val: 65, label: 'Kompakt', sub: '%65' },
+                    ].map((item) => (
+                      <button
+                        key={item.val}
+                        type="button"
+                        onClick={() => onScreenHeightPercentChange(item.val)}
+                        className={`py-1.5 px-1 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
+                          screenHeightPercent === item.val
+                            ? 'bg-sky-500 text-slate-950 font-bold border-sky-400 shadow-sm'
+                            : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-[10px] font-bold leading-tight">{item.label}</div>
+                        <div className="text-[8px] opacity-75">{item.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Pitch / Eğim */}
                 <div className="space-y-1.5 bg-white/5 p-3 rounded-xl border border-white/10">
@@ -746,19 +763,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <div className="grid grid-cols-3 gap-1.5 pt-1">
                   <button
                     onClick={() => onCameraChange({ pitch: -45, heading: 0 })}
-                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center"
+                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center cursor-pointer"
                   >
                     Kuzey 45°
                   </button>
                   <button
                     onClick={() => onCameraChange({ pitch: -30, heading: 90 })}
-                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center"
+                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center cursor-pointer"
                   >
                     Doğu 30°
                   </button>
                   <button
                     onClick={() => onCameraChange({ pitch: -90, heading: 0 })}
-                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center"
+                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center cursor-pointer"
                   >
                     Kuşbakışı
                   </button>
@@ -1113,6 +1130,70 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     onChange={(e) => onWatermarkChange({ visible: e.target.checked })}
                     className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
                   />
+                </div>
+
+                {/* Firma Bilgilerini Varsayılan Olarak Kaydet & Yönet */}
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-emerald-500/15 border border-amber-400/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Firma Bilgilerini Varsayılan Yap</span>
+                    </div>
+                    {hasSavedDefaults && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
+                        Kayıtlı Profil Aktif
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Firma adı, telefon, web, logo ve filigran ayarlarını tarayıcınıza kaydedin. Uygulama her açıldığında otomatik yüklenir.
+                  </p>
+
+                  {defaultSaveFeedback && (
+                    <div
+                      className={`p-2 rounded-lg text-[10px] font-medium flex items-center gap-1.5 animate-in fade-in duration-200 ${
+                        defaultSaveFeedback.isError
+                          ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>{defaultSaveFeedback.message}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveDefaultWatermark}
+                      className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-98 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Varsayılan Olarak Kaydet</span>
+                    </button>
+
+                    {hasSavedDefaults && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleRestoreDefaultWatermark}
+                          className="py-2 px-2.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-98 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-white/15 transition cursor-pointer"
+                          title="Varsayılan bilgileri geri yükle"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Geri Yükle</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearDefaultWatermark}
+                          className="py-2 px-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition cursor-pointer"
+                          title="Varsayılan kaydı temizle"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Firma Adı */}

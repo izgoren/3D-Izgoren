@@ -13,6 +13,8 @@ import { ControlPanel } from './components/ControlPanel';
 import { WatermarkOverlay } from './components/WatermarkOverlay';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { AppUpdateChecker } from './components/AppUpdateChecker';
+import { loadDefaultCompanyInfo } from './utils/watermarkStorage';
 import {
   Smartphone,
   Square,
@@ -25,6 +27,8 @@ import {
   Video as VideoIcon,
   Rotate3d,
   LocateFixed,
+  Compass,
+  Scaling,
 } from 'lucide-react';
 
 export default function App() {
@@ -33,6 +37,14 @@ export default function App() {
 
   // Video Frame Format
   const [videoFormat, setVideoFormat] = useState<VideoFormatType>('reels');
+
+  // 3D Parsel Studio Panel State (Open by default on desktop, closed on mobile)
+  const [isPanelOpen, setIsPanelOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return false;
+  });
 
   // 3D Camera State
   const [cameraState, setCameraState] = useState<CameraState>({
@@ -60,21 +72,55 @@ export default function App() {
     animateLine: true,
   });
 
-  // Watermark Banner Config
-  const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>({
-    visible: true,
-    companyName: 'İzgören Emlak Yatırım Danışmanlık',
-    phone: '0532 395 02 63',
-    web: 'www.izgorenemlak.com',
-    adaParselText: '',
-    priceTag: '',
-    logoUrl: null,
-    position: 'bottom-right',
-    adaParselPosition: 'inside',
-    opacity: 0.85,
-    showLocationBadge: true,
-    badgeStyle: 'glass',
+  // Watermark Banner Config (Defaults restored from localStorage if previously saved)
+  const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>(() => {
+    const base: WatermarkConfig = {
+      visible: true,
+      companyName: 'İzgören Emlak Yatırım Danışmanlık',
+      phone: '0532 395 02 63',
+      web: 'www.izgorenemlak.com',
+      adaParselText: '',
+      priceTag: '',
+      logoUrl: null,
+      position: 'bottom-right',
+      adaParselPosition: 'inside',
+      opacity: 0.85,
+      showLocationBadge: true,
+      badgeStyle: 'glass',
+    };
+    const saved = loadDefaultCompanyInfo();
+    if (saved) {
+      return {
+        ...base,
+        ...saved,
+      };
+    }
+    return base;
   });
+
+  // Screen & Kadraj Height Scale (%50 - %100)
+  const [screenHeightPercent, setScreenHeightPercent] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('PARSEL_STUDIO_SCREEN_HEIGHT');
+        if (saved) {
+          const parsed = parseInt(saved, 10);
+          if (!isNaN(parsed) && parsed >= 40 && parsed <= 100) return parsed;
+        }
+      } catch (e) {}
+    }
+    return 100;
+  });
+
+  const [showScreenSizeMenu, setShowScreenSizeMenu] = useState(false);
+
+  const handleScreenHeightChange = useCallback((percent: number) => {
+    const clamped = Math.max(50, Math.min(100, percent));
+    setScreenHeightPercent(clamped);
+    try {
+      localStorage.setItem('PARSEL_STUDIO_SCREEN_HEIGHT', clamped.toString());
+    } catch (e) {}
+  }, []);
 
   // 3D Arazi / Topoğrafya Kabartması Aktif / Pasif
   const [isTerrainActive, setIsTerrainActive] = useState<boolean>(true);
@@ -124,6 +170,39 @@ export default function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black flex flex-col font-sans select-none">
       
+      {/* Sol Üst Bar: 3D Parsel Studio ve Sürüm Güncelleme & Denetleme Butonu */}
+      <div className="absolute top-3 left-3 sm:top-4 sm:left-5 z-40 flex items-center gap-2">
+        {/* 3D Parsel Studio Butonu */}
+        <button
+          onClick={() => setIsPanelOpen((prev) => !prev)}
+          className={`min-h-[36px] sm:min-h-[38px] px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 backdrop-blur-xl border shadow-2xl transition active:scale-95 cursor-pointer ${
+            isPanelOpen
+              ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-slate-950 border-sky-300 shadow-sky-500/25'
+              : 'bg-slate-950/90 hover:bg-slate-900 border-sky-400/40 hover:border-sky-400 text-white shadow-black/80'
+          }`}
+          title="3D Parsel Studio Panelini Aç / Kapat"
+        >
+          <div
+            className={`w-5 h-5 rounded-lg flex items-center justify-center transition ${
+              isPanelOpen ? 'bg-slate-950/20 text-slate-950' : 'bg-sky-500/20 text-sky-400'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+          </div>
+          <span className="tracking-wide">3D Parsel Studio</span>
+          <span
+            className={`hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+              isPanelOpen ? 'bg-slate-950/20 text-slate-950 font-bold' : 'bg-white/10 text-sky-300'
+            }`}
+          >
+            {isPanelOpen ? 'Açık' : 'Menü'}
+          </span>
+        </button>
+
+        {/* Uygulama Üst Panelinde Güncelleme ve Denetleme Butonu */}
+        <AppUpdateChecker />
+      </div>
+
       {/* Top Floating Quick Bar */}
       <header className="absolute top-3 right-3 sm:top-4 sm:right-5 z-40 flex items-center gap-1.5 sm:gap-2">
         
@@ -169,15 +248,68 @@ export default function App() {
           </button>
         </div>
 
-        {/* GPS Konum Butonu */}
-        <button
-          onClick={() => viewerMethods?.flyToDeviceLocation()}
-          className="min-h-[34px] sm:min-h-[36px] p-2 sm:px-2.5 sm:py-2 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-white/15 hover:border-sky-400/50 text-sky-400 hover:text-sky-300 text-xs font-medium flex items-center gap-1.5 backdrop-blur-xl shadow-xl transition active:scale-95"
-          title="Cihazımın GPS Konumuna Git"
-        >
-          <LocateFixed className="w-4 h-4 text-sky-400" />
-          <span className="hidden lg:inline">Konumum</span>
-        </button>
+        {/* Ekran Boyu Hızlı Seçici Popover */}
+        <div className="relative">
+          <button
+            onClick={() => setShowScreenSizeMenu((prev) => !prev)}
+            className={`min-h-[34px] sm:min-h-[36px] px-2 sm:px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xl border transition active:scale-95 cursor-pointer shadow-xl ${
+              screenHeightPercent < 100
+                ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/20'
+                : 'bg-slate-950/80 hover:bg-slate-900 border-white/15 text-slate-300 hover:text-white'
+            }`}
+            title="Ekran & Kadraj Boyunu Ayarla"
+          >
+            <Scaling className="w-3.5 h-3.5 text-sky-400" />
+            <span className="font-mono text-[11px]">%{screenHeightPercent}</span>
+          </button>
+
+          {showScreenSizeMenu && (
+            <div className="absolute top-full mt-2 right-0 w-56 p-3 rounded-2xl bg-slate-950/95 backdrop-blur-2xl border border-sky-400/40 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                  <Scaling className="w-3.5 h-3.5" />
+                  Ekran Boyu
+                </span>
+                <span className="text-xs font-mono font-bold text-white px-2 py-0.5 rounded bg-sky-500/20 border border-sky-400/30">
+                  %{screenHeightPercent}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="50"
+                max="100"
+                step="5"
+                value={screenHeightPercent}
+                onChange={(e) => handleScreenHeightChange(parseInt(e.target.value, 10))}
+                className="w-full accent-sky-400 cursor-pointer h-1.5 bg-white/10 rounded-lg mb-2.5"
+              />
+              <div className="grid grid-cols-4 gap-1">
+                {[
+                  { val: 100, label: '%100' },
+                  { val: 90, label: '%90' },
+                  { val: 80, label: '%80' },
+                  { val: 65, label: '%65' },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    type="button"
+                    onClick={() => {
+                      handleScreenHeightChange(item.val);
+                      setShowScreenSizeMenu(false);
+                    }}
+                    className={`py-1 px-1 rounded-lg text-[10px] font-bold transition text-center cursor-pointer ${
+                      screenHeightPercent === item.val
+                        ? 'bg-sky-500 text-slate-950 font-bold'
+                        : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 3D Tur Hızlı Buton */}
         <button
@@ -257,6 +389,7 @@ export default function App() {
           isTerrainActive={isTerrainActive}
           onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
           onViewerReady={setViewerMethods}
+          screenHeightPercent={screenHeightPercent}
         >
           {/* Watermark rendered INSIDE the Cesium container */}
           <WatermarkOverlay config={watermarkConfig} activeParcel={activeParcel} />
@@ -265,6 +398,8 @@ export default function App() {
 
       {/* Floating Studio Control Panel */}
       <ControlPanel
+        isOpen={isPanelOpen}
+        onToggleOpen={() => setIsPanelOpen((prev) => !prev)}
         baseMap={baseMap}
         onBaseMapChange={setBaseMap}
         videoFormat={videoFormat}
@@ -281,6 +416,8 @@ export default function App() {
         isTerrainActive={isTerrainActive}
         onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
         viewerMethods={viewerMethods}
+        screenHeightPercent={screenHeightPercent}
+        onScreenHeightPercentChange={handleScreenHeightChange}
       />
 
       {/* PWA Çevrimdışı Durum Rozeti */}

@@ -22,6 +22,7 @@ interface CesiumViewerProps {
   isTerrainActive: boolean;
   onToggleTerrain: () => void;
   onViewerReady?: (methods: ViewerMethods) => void;
+  screenHeightPercent?: number;
   children?: React.ReactNode;
 }
 
@@ -34,7 +35,7 @@ export interface ViewerMethods {
   flyToDeviceLocation: () => void;
 }
 
-// 2D Canvas Watermark Renderer for Video & Snapshot
+// 2D Canvas Watermark Renderer for Video & Snapshot (Proportionally scaled to recording dimensions)
 function renderWatermarkToCanvas(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -45,10 +46,17 @@ function renderWatermarkToCanvas(
 ) {
   if (!config.visible) return;
 
-  const scale = Math.max(0.65, Math.min(1.4, Math.min(width, height) / 900));
-  const cardW = 340 * scale;
-  const cardH = 135 * scale;
-  const margin = 20 * scale;
+  // Proportional watermark scaling according to recording / video dimensions
+  const isPortrait = height > width;
+  const baseDim = isPortrait ? width : Math.min(width, height);
+  // Standard 1080p landscape (1920x1080): baseDim = 1080 -> scale = 1.05
+  // Standard 9:16 vertical reels (1080x1920): baseDim = 1080 -> scale = 1.14
+  // 4K (3840x2160): baseDim = 2160 -> scale = 2.15
+  // Mobile recording/preview: baseDim = ~400 -> scale = 0.58
+  const scale = Math.max(0.55, Math.min(2.5, baseDim / 950));
+  const cardW = Math.min(345 * scale, width - 24 * scale);
+  const cardH = 136 * scale;
+  const margin = Math.max(10, 18 * scale);
   const opacity = config.opacity ?? 0.85;
 
   let cardX = width - cardW - margin;
@@ -98,7 +106,7 @@ function renderWatermarkToCanvas(
 
   // Draw Separate Ada/Parsel Badge if not inside
   if (config.adaParselPosition && config.adaParselPosition !== 'inside' && adaParselText) {
-    const badgeW = 200 * scale;
+    const badgeW = Math.min(200 * scale, width - 24 * scale);
     const badgeH = 34 * scale;
     let bX = margin;
     let bY = margin;
@@ -242,7 +250,7 @@ function renderWatermarkToCanvas(
   // Price Tag on Right
   const price = config.priceTag || parcel?.price;
   if (price) {
-    const pW = 120 * scale;
+    const pW = Math.min(120 * scale, cardW * 0.4);
     const pX = cardX + cardW - pW - 12 * scale;
     ctx.fillStyle = 'rgba(16, 185, 129, 0.2)';
     ctx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
@@ -359,6 +367,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   isTerrainActive,
   onToggleTerrain,
   onViewerReady,
+  screenHeightPercent = 100,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -459,7 +468,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [watermarkConfig.logoUrl]);
 
-  // Provider selector
+  // Provider selector (Google & Esri with WebMercator tiling scheme for crisp tile loading)
   const getProvider = useCallback((type: BaseMapType) => {
     if (typeof Cesium === 'undefined') return null;
 
@@ -468,6 +477,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const p = new Cesium.UrlTemplateImageryProvider({
           url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
           subdomains: ['0', '1', '2', '3'],
+          tilingScheme: new Cesium.WebMercatorTilingScheme(),
           maximumLevel: 21,
           credit: 'Google Saf Uydu',
         });
@@ -475,25 +485,14 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         return p;
       }
 
-      if (type === 'yandex_hybrid') {
+      if (type === 'esri_satellite') {
         const p = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://sat0{s}.maps.yandex.net/tiles?l=sat,skl&x={x}&y={y}&z={z}&lang=tr_TR',
-          subdomains: ['1', '2', '3', '4'],
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          tilingScheme: new Cesium.WebMercatorTilingScheme(),
           maximumLevel: 19,
-          credit: 'Yandex Hibrit Uydu',
+          credit: 'Esri World Imagery',
         });
-        p.errorEvent?.addEventListener((err: any) => console.warn('Yandex Hybrid tile error:', err));
-        return p;
-      }
-
-      if (type === 'yandex_satellite') {
-        const p = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://sat0{s}.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}&lang=tr_TR',
-          subdomains: ['1', '2', '3', '4'],
-          maximumLevel: 19,
-          credit: 'Yandex Saf Uydu',
-        });
-        p.errorEvent?.addEventListener((err: any) => console.warn('Yandex Satellite tile error:', err));
+        p.errorEvent?.addEventListener((err: any) => console.warn('Esri tile error:', err));
         return p;
       }
 
@@ -501,6 +500,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       const p = new Cesium.UrlTemplateImageryProvider({
         url: 'https://mt{s}.google.com/vt/lyrs=y&hl=tr&x={x}&y={y}&z={z}',
         subdomains: ['0', '1', '2', '3'],
+        tilingScheme: new Cesium.WebMercatorTilingScheme(),
         maximumLevel: 21,
         credit: 'Google Hibrit Uydu',
       });
@@ -510,6 +510,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       console.error('Altlık harita sağlayıcı hatası:', err);
       return new Cesium.UrlTemplateImageryProvider({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        tilingScheme: new Cesium.WebMercatorTilingScheme(),
         maximumLevel: 19,
       });
     }
@@ -621,6 +622,8 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         Cesium.Ion.defaultAccessToken = '';
 
         const viewer = new Cesium.Viewer(containerRef.current, {
+          sceneMode: Cesium.SceneMode.COLUMBUS_VIEW, // Düz Harita Görünümü (2.5D Columbus Projeksiyonu - Küre yerine düz zemin)
+          mapProjection: new Cesium.WebMercatorProjection(),
           baseLayer: false, // Critical: Stops Cesium from trying to fetch Ion Bing Maps without a token
           baseLayerPicker: false,
           geocoder: false,
@@ -663,12 +666,15 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           currentLayerRef.current = viewer.imageryLayers.addImageryProvider(initialProvider);
         }
 
-        // Optimize visual scene & Maximize imagery clarity
+        // Optimize visual scene & Maximize imagery clarity on flat map
         viewer.scene.globe.show = true;
         viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0f172a');
         viewer.scene.globe.depthTestAgainstTerrain = false;
         viewer.scene.globe.enableLighting = false; // Prevents pitch black night side shadow
-        viewer.scene.skyAtmosphere.show = true;
+        if (viewer.scene.skyAtmosphere) {
+          viewer.scene.skyAtmosphere.show = false;
+        }
+        viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
         // Force Cesium to load higher-resolution tiles sooner (Lower screen space error = crisper textures)
         viewer.scene.globe.maximumScreenSpaceError = 1.25; // Default is 2.0 (1.25 requests higher zoom levels earlier)
@@ -677,19 +683,19 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         viewer.scene.globe.preloadAncestors = true;
         viewer.scene.globe.preloadSiblings = true;
 
-        // Set initial orbital camera view to display the global 3D Earth (Dünya Küresi) in space
-        const initialEarthCenter = Cesium.Cartesian3.fromDegrees(35.0, 39.0, 0);
-        parcelCenterRef.current = initialEarthCenter;
+        // Set initial camera view to display flat satellite map over Turkey / region
+        const initialMapCenter = Cesium.Cartesian3.fromDegrees(35.0, 39.0, 0);
+        parcelCenterRef.current = initialMapCenter;
 
         try {
           viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
         } catch (e) {}
 
         viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(35.0, 39.0, 18500000),
+          destination: Cesium.Cartesian3.fromDegrees(35.0, 39.0, 950000),
           orientation: {
             heading: Cesium.Math.toRadians(0),
-            pitch: Cesium.Math.toRadians(-89.9),
+            pitch: Cesium.Math.toRadians(-89.5),
             roll: 0,
           },
         });
@@ -761,6 +767,20 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       }
     };
   }, [getProvider, onCameraChange, updateCameraView, centerOnParcel]);
+
+  // Dynamic ResizeObserver for seamless screen size adjustments & window resizing
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(() => {
+      if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+        try {
+          viewerRef.current.resize();
+        } catch (e) {}
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [isCesiumReady]);
 
   // Handle Terrain Active / Passive Toggle & Auto-center parcel
   useEffect(() => {
@@ -1254,14 +1274,68 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const getFormatClasses = () => {
     switch (videoFormat) {
       case 'reels':
-        return 'w-full max-w-[min(405px,92vw)] max-h-[min(720px,78vh,calc(100dvh-130px))] aspect-[9/16] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
+        return 'aspect-[9/16] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
       case 'post':
-        return 'w-full max-w-[min(580px,88vw)] max-h-[min(580px,75vh,calc(100dvh-140px))] aspect-square rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
+        return 'aspect-square rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
       case 'portrait':
-        return 'w-full max-w-[min(460px,88vw)] max-h-[min(580px,78vh,calc(100dvh-130px))] aspect-[4/5] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
+        return 'aspect-[4/5] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
       case 'youtube':
       default:
-        return 'w-full h-full rounded-none border-none';
+        return (screenHeightPercent ?? 100) >= 99
+          ? 'w-full h-full rounded-none border-none'
+          : 'aspect-[16/9] rounded-2xl shadow-2xl border-2 border-sky-400/60 ring-4 ring-sky-500/20';
+    }
+  };
+
+  // Dynamic height & sizing based on screenHeightPercent
+  const getFormatStyle = (): React.CSSProperties => {
+    const scale = Math.max(0.45, Math.min(1.0, (screenHeightPercent ?? 100) / 100));
+
+    switch (videoFormat) {
+      case 'reels': {
+        const maxH = Math.min(840, Math.round(window.innerHeight * 0.88 * scale));
+        return {
+          height: `${maxH}px`,
+          maxHeight: `${maxH}px`,
+          maxWidth: `${Math.round(maxH * (9 / 16))}px`,
+          width: '100%',
+        };
+      }
+      case 'post': {
+        const maxH = Math.min(680, Math.round(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.84) * scale));
+        return {
+          height: `${maxH}px`,
+          maxHeight: `${maxH}px`,
+          maxWidth: `${maxH}px`,
+          width: '100%',
+        };
+      }
+      case 'portrait': {
+        const maxH = Math.min(740, Math.round(window.innerHeight * 0.86 * scale));
+        return {
+          height: `${maxH}px`,
+          maxHeight: `${maxH}px`,
+          maxWidth: `${Math.round(maxH * (4 / 5))}px`,
+          width: '100%',
+        };
+      }
+      case 'youtube':
+      default: {
+        if (scale >= 0.99) {
+          return {
+            width: '100%',
+            height: '100%',
+          };
+        }
+        const maxH = Math.round(window.innerHeight * scale);
+        const maxW = Math.min(window.innerWidth - 24, Math.round(maxH * (16 / 9)));
+        return {
+          height: `${maxH}px`,
+          maxHeight: `${maxH}px`,
+          maxWidth: `${maxW}px`,
+          width: '100%',
+        };
+      }
     }
   };
 
@@ -1272,10 +1346,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-neutral-950 flex items-center justify-center">
-      {/* 3D Canvas Box (Responsive Kadraj) */}
+    <div className="relative w-full h-screen overflow-hidden bg-neutral-950 flex items-center justify-center p-1 sm:p-2">
+      {/* 3D Canvas Box (Responsive Kadraj & Dinamik Ekran Boyu) */}
       <div
         id="cesiumContainer"
+        style={getFormatStyle()}
         className={`relative overflow-hidden transition-all duration-300 ease-in-out bg-black ${getFormatClasses()}`}
       >
         <div ref={containerRef} className="w-full h-full touch-none select-none" />
@@ -1315,45 +1390,59 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           </div>
         )}
 
-        {/* 3D Terrain Kabartma Aktif / Pasif Toggle Button (Positioned at top-left to avoid top-right toolbar clash) */}
-        <div className="absolute top-4 left-4 sm:left-14 z-30 flex items-center gap-2">
+        {/* Ekran Sağı Dikey Çubuk: 3D Arazi (Aktif / Pasif) & GPS Konum Butonu */}
+        <div className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/80 select-none">
+          {/* 3D Arazi (Aktif / Pasif) Butonu */}
           <button
+            id="btn-terrain-toggle-vertical"
             onClick={onToggleTerrain}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl backdrop-blur-md border flex items-center gap-1.5 sm:gap-2 text-xs font-semibold shadow-xl transition cursor-pointer active:scale-95 ${
+            className={`group relative flex flex-col items-center justify-center w-12 sm:w-14 py-2 px-1 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
               isTerrainActive
-                ? 'bg-emerald-950/85 border-emerald-400/80 text-emerald-300 hover:bg-emerald-900/90 shadow-emerald-950/50'
-                : 'bg-slate-950/80 border-white/20 text-slate-400 hover:text-white hover:bg-black/90'
+                ? 'bg-emerald-500/20 border-emerald-400/80 text-emerald-300 shadow-lg shadow-emerald-500/20'
+                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
             }`}
-            title="3D Arazi Topoğrafyası ve Dağ/Tepe Kabartmasını Aç / Kapat"
+            title={
+              isTerrainActive
+                ? '3D Arazi Topoğrafyası Aktif (Kapatmak için dokunun)'
+                : '3D Arazi Topoğrafyası Pasif (Açmak için dokunun)'
+            }
           >
-            <Mountain className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isTerrainActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-            <span className="hidden sm:inline">3D Arazi:</span>
+            <Mountain
+              className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
+                isTerrainActive ? 'text-emerald-400' : 'text-slate-400'
+              }`}
+            />
+            <span className="text-[10px] font-bold mt-1 tracking-tight">3D</span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+              className={`mt-0.5 px-1 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase leading-none ${
                 isTerrainActive
-                  ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
-                  : 'bg-white/10 text-slate-400 border border-white/10'
+                  ? 'bg-emerald-400 text-slate-950 shadow-sm'
+                  : 'bg-white/10 text-slate-400'
               }`}
             >
               {isTerrainActive ? 'AKTİF' : 'PASİF'}
             </span>
           </button>
-        </div>
 
-        {/* Floating Google Maps-style "Konumuma Git" (GPS) Button (Highly visible on Mobile iOS & Android) */}
-        <div className="absolute bottom-20 sm:bottom-6 right-3 sm:right-6 z-30 flex flex-col items-end gap-2">
+          {/* Dikey Ayırıcı Çizgi */}
+          <div className="w-8 h-px bg-white/10 my-0.5" />
+
+          {/* GPS Konum Butonu */}
           <button
             id="btn-floating-my-location"
             onClick={flyToDeviceLocation}
-            className="group relative flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-slate-950/90 hover:bg-slate-900 active:bg-slate-800 border-2 border-sky-400/70 hover:border-sky-300 text-white shadow-2xl shadow-sky-500/30 backdrop-blur-xl transition active:scale-95 cursor-pointer"
-            title="Haritayı Mevcut Konumuma Getir (GPS)"
+            className="group relative flex flex-col items-center justify-center w-12 sm:w-14 py-2 px-1 rounded-xl bg-white/5 hover:bg-sky-500/20 active:bg-sky-500/30 border border-white/10 hover:border-sky-400/60 text-slate-200 hover:text-sky-300 transition-all duration-200 active:scale-95 cursor-pointer"
+            title="Cihazımın GPS Konumuna Git"
           >
             <div className="relative flex items-center justify-center">
-              <span className="absolute -inset-1 rounded-full bg-sky-400/30 animate-ping" />
-              <LocateFixed className="w-5 h-5 text-sky-400 group-hover:rotate-45 transition duration-300" />
+              <span className="absolute -inset-1 rounded-full bg-sky-400/20 group-hover:animate-ping opacity-0 group-hover:opacity-100 transition" />
+              <LocateFixed className="w-5 h-5 text-sky-400 group-hover:scale-110 group-hover:rotate-45 transition duration-200" />
             </div>
-            <span className="text-xs font-bold text-sky-200 tracking-wide">
-              Konumuma Git
+            <span className="text-[10px] font-bold mt-1 text-slate-300 group-hover:text-sky-300 tracking-tight">
+              Konum
+            </span>
+            <span className="mt-0.5 px-1 py-0.5 rounded text-[8px] font-semibold text-sky-400/80 font-mono leading-none">
+              GPS
             </span>
           </button>
         </div>
