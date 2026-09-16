@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle2, AlertCircle, ArrowUpCircle, X, ShieldCheck, HardDriveDownload } from 'lucide-react';
+import {
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  ArrowUpCircle,
+  X,
+  ShieldCheck,
+  HardDriveDownload,
+  GitBranch,
+  ExternalLink,
+  Info,
+} from 'lucide-react';
 
-const CURRENT_VERSION = 'v2.5.0';
+const CURRENT_VERSION = 'v2.6.0';
 const RELEASE_DATE = '16 Eylül 2026';
 
 export const AppUpdateChecker: React.FC = () => {
@@ -100,7 +111,7 @@ export const AppUpdateChecker: React.FC = () => {
       {/* Top Bar Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`min-h-[34px] sm:min-h-[36px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition active:scale-95 cursor-pointer ${
+        className={`min-h-[34px] sm:min-h-[36px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition active:scale-95 cursor-pointer ${
           hasUpdate
             ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold animate-pulse shadow-emerald-500/30'
             : 'bg-slate-950/85 hover:bg-slate-900 border-white/15 hover:border-sky-400/50 text-slate-200'
@@ -108,7 +119,7 @@ export const AppUpdateChecker: React.FC = () => {
         title="Uygulama Sürümünü Denetle ve Güncelle"
       >
         <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isChecking ? 'animate-spin' : ''}`} />
-        <span className="hidden md:inline">Güncelleme</span>
+        <span className="font-semibold text-[11px] sm:text-xs">Güncelle</span>
         <span className="px-1.5 py-0.5 rounded-md bg-white/10 text-[10px] font-mono text-sky-300">
           {CURRENT_VERSION}
         </span>
@@ -183,14 +194,33 @@ export const AppUpdateChecker: React.FC = () => {
             </div>
 
             {/* Release notes summary */}
-            <div className="text-[11px] text-slate-400 space-y-1 bg-black/40 p-3 rounded-xl border border-white/5">
-              <div className="font-semibold text-slate-200">Son Değişiklikler:</div>
-              <ul className="list-disc list-inside space-y-0.5 text-slate-300">
-                <li>Düz zemin projeksiyonu (Dünya küresi yerine düz uydu haritası)</li>
-                <li>3D Tur sekmesine taşınan harita ve kadraj araçları</li>
-                <li>Kayıt ve video boyutuna göre oransal filigram ölçekleme</li>
-                <li>Esri & Google Yüksek Çözünürlüklü uydu katmanları</li>
+            <div className="text-[11px] text-slate-400 space-y-1.5 bg-black/40 p-3 rounded-xl border border-white/5">
+              <div className="font-semibold text-slate-200 flex items-center justify-between">
+                <span>Son Yenilikler (v2.6.0):</span>
+                <span className="text-[10px] text-sky-400 font-mono">16 Eylül 2026</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-slate-300">
+                <li><strong className="text-white">Firma Bilgilerini Varsayılan Yap:</strong> Filigran sekmesinden kaydedilerek her açılışta otomatik yüklenir.</li>
+                <li><strong className="text-white">Ekran & Kadraj Boyu:</strong> Üst bardan veya panelden %50-%100 arası dikey boyut ayarı.</li>
+                <li><strong className="text-white">Dikey Kontrol Çubuğu:</strong> Sağ kenarda 3D açı kilidi, sıfırlama ve GPS konumlanma.</li>
+                <li><strong className="text-white">Düz Zemin & Dinamik Ölçekleme:</strong> Düz uydu haritası ve videolara göre oransal filigran.</li>
               </ul>
+            </div>
+
+            {/* GitHub Sayfası ve Senkronizasyon Bilgilendirme Kartı */}
+            <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-950/50 to-slate-900/60 border border-indigo-500/30 text-xs space-y-2">
+              <div className="flex items-center gap-2 text-indigo-300 font-bold">
+                <GitBranch className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>GitHub Sayfanızda Güncellemeler Görünmüyor mu?</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Google AI Studio içinde yapılan kod değişiklikleri, AI Studio geliştirme ortamındadır. Kendi GitHub sayfanıza yansıması için:
+              </p>
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300 font-medium pl-1">
+                <li>AI Studio ekranının sağ üstündeki <strong className="text-sky-300">"Share / Export"</strong> veya <strong className="text-sky-300">"GitHub"</strong> butonuna tıklayıp kodları GitHub deponuza gönderin (Push/Export).</li>
+                <li>GitHub Pages kullanıyorsanız, GitHub Actions derlemesinin tamamlanması için <strong className="text-amber-300">1-2 dakika</strong> bekleyin.</li>
+                <li>GitHub sayfanızı açıp <strong className="text-emerald-300">Ctrl + F5</strong> ile sert yenileme yapın (veya tarayıcı önbelleğini temizleyin).</li>
+              </ol>
             </div>
 
             {/* Action Buttons */}
