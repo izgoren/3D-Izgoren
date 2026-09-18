@@ -11,19 +11,19 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
   if (!config.visible) return null;
 
   const positionClasses: Record<string, string> = {
-    'bottom-right': 'bottom-3 right-3 sm:bottom-6 sm:right-6',
-    'bottom-left': 'bottom-3 left-3 sm:bottom-6 sm:left-6',
-    'top-right': 'top-3 right-3 sm:top-6 sm:right-6',
-    'top-left': 'top-3 left-3 sm:top-6 sm:left-6',
-    'bottom-center': 'bottom-3 left-1/2 -translate-x-1/2 sm:bottom-6',
-    'top-center': 'top-3 left-1/2 -translate-x-1/2 sm:top-6',
+    'bottom-right': 'bottom-20 right-3 sm:bottom-6 sm:right-6',
+    'bottom-left': 'bottom-20 left-3 sm:bottom-6 sm:left-6',
+    'top-right': 'top-16 right-3 sm:top-20 sm:right-6',
+    'top-left': 'top-16 left-3 sm:top-20 sm:left-6',
+    'bottom-center': 'bottom-20 left-1/2 -translate-x-1/2 sm:bottom-6',
+    'top-center': 'top-16 left-1/2 -translate-x-1/2 sm:top-20',
   };
 
   const separateBadgePositions: Record<string, string> = {
-    'top-left': 'top-3 left-3 sm:top-6 sm:left-6',
-    'top-right': 'top-3 right-3 sm:top-6 sm:right-6',
-    'bottom-left': 'bottom-3 left-3 sm:bottom-6 sm:left-6',
-    'bottom-right': 'bottom-3 right-3 sm:bottom-6 sm:right-6',
+    'top-left': 'top-16 left-3 sm:top-20 sm:left-6',
+    'top-right': 'top-16 right-3 sm:top-20 sm:right-6',
+    'bottom-left': 'bottom-20 left-3 sm:bottom-6 sm:left-6',
+    'bottom-right': 'bottom-20 right-3 sm:bottom-6 sm:right-6',
   };
 
   // Build Location String: İl / İlçe / Mahalle

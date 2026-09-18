@@ -78,7 +78,7 @@ export const IzgorenAdScreen: React.FC<IzgorenAdScreenProps> = ({
   ];
 
   return (
-    <div className="relative w-full h-full min-h-screen overflow-y-auto bg-slate-950 text-slate-100 flex flex-col items-center justify-between px-4 py-8 sm:py-12 z-20">
+    <div className="relative w-full h-full min-h-screen overflow-y-auto bg-slate-950 text-slate-100 flex flex-col items-center justify-between px-4 pt-16 pb-8 sm:pt-20 sm:pb-12 z-20">
       
       {/* Arka Plan Mimari Çizgi Efekti */}
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-35" />

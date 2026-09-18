@@ -49,12 +49,14 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'h
         title="Uygulamayı telefona veya masaüstüne uygulama (PWA) olarak yükleyin"
         className={
           variant === 'header'
-            ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-md hover:shadow-sky-500/20 transition-all active:scale-95'
+            ? 'min-h-[34px] sm:min-h-[36px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-md hover:shadow-sky-500/20 transition-all active:scale-95 cursor-pointer shrink-0'
             : 'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg hover:shadow-sky-500/20 transition-all active:scale-98'
         }
       >
-        <Download className="w-3.5 h-3.5" />
-        <span>{isIOS ? 'Telefona Yükle' : 'Uygulamayı Yükle'}</span>
+        <Download className="w-3.5 h-3.5 shrink-0" />
+        <span className={variant === 'header' ? 'hidden md:inline' : ''}>
+          {isIOS ? 'Telefona Yükle' : 'Uygulamayı Yükle'}
+        </span>
       </button>
 
       {/* iOS / Manuel Yükleme Rehberi Modalı */}

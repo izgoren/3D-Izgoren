@@ -111,15 +111,15 @@ export const AppUpdateChecker: React.FC = () => {
       {/* Top Bar Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`min-h-[34px] sm:min-h-[36px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition active:scale-95 cursor-pointer ${
+        className={`min-h-[34px] sm:min-h-[36px] px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition active:scale-95 cursor-pointer shrink-0 ${
           hasUpdate
             ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold animate-pulse shadow-emerald-500/30'
             : 'bg-slate-950/85 hover:bg-slate-900 border-white/15 hover:border-sky-400/50 text-slate-200'
         }`}
         title="Uygulama Sürümünü Denetle ve Güncelle"
       >
-        <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isChecking ? 'animate-spin' : ''}`} />
-        <span className="font-semibold text-[11px] sm:text-xs">Güncelle</span>
+        <RefreshCw className={`w-3.5 h-3.5 text-sky-400 shrink-0 ${isChecking ? 'animate-spin' : ''}`} />
+        <span className="hidden sm:inline font-semibold text-[11px] sm:text-xs">Güncelle</span>
         <span className="px-1.5 py-0.5 rounded-md bg-white/10 text-[10px] font-mono text-sky-300">
           {CURRENT_VERSION}
         </span>

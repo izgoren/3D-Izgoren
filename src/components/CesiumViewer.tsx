@@ -703,12 +703,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
-        // Force Cesium to load higher-resolution tiles sooner (Lower screen space error = crisper textures)
-        viewer.scene.globe.maximumScreenSpaceError = 1.25; // Default is 2.0 (1.25 requests higher zoom levels earlier)
-        viewer.scene.globe.tileCacheSize = 400; // Cache more HD tiles in GPU/RAM
-        viewer.scene.globe.loadingDescendantLimit = 32;
+        // Optimize scene for smooth 60fps performance and rock-solid stability
+        viewer.scene.globe.maximumScreenSpaceError = 1.6; // Balanced crispness and bandwidth/FPS (1.25 causes severe tile churn on mobile)
+        viewer.scene.globe.tileCacheSize = 250; // Optimized RAM/VRAM footprint for rock-solid stability and prevention of browser tab crashes
+        viewer.scene.globe.loadingDescendantLimit = 16;
         viewer.scene.globe.preloadAncestors = true;
-        viewer.scene.globe.preloadSiblings = true;
+        viewer.scene.globe.preloadSiblings = false; // Reduces network contention on mobile connections
 
         // Set initial camera view to display flat satellite map over Turkey / region
         const initialMapCenter = Cesium.Cartesian3.fromDegrees(35.0, 39.0, 0);
@@ -727,13 +727,20 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           },
         });
 
-        // Setup clock tick listener for continuous cinematic 3D tour
+        // Setup clock tick listener for continuous cinematic 3D tour (Throttled React notification for max speed)
+        let lastHeadingNotification = 0;
         const onTick = () => {
           if (isTouringRef.current && parcelCenterRef.current) {
             const nextHeading = (headingRef.current + tourSpeedRef.current) % 360;
             headingRef.current = nextHeading;
-            onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
             updateCameraView();
+
+            // Throttle React state re-renders to 4Hz (250ms) to ensure 60fps buttery smooth rendering without UI lag
+            const now = performance.now();
+            if (now - lastHeadingNotification > 250) {
+              lastHeadingNotification = now;
+              onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
+            }
           }
         };
 
@@ -1535,7 +1542,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         )}
 
         {/* Ekran Sağı Dikey Çubuk: 3D Arazi (Aktif / Pasif) & GPS Konum Butonu */}
-        <div className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/80 select-none">
+        <div className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 sm:gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/80 select-none">
           {/* 3D Arazi (Aktif / Pasif) Butonu */}
           <button
             id="btn-terrain-toggle-vertical"

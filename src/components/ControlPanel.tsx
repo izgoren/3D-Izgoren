@@ -47,7 +47,6 @@ import {
   WatermarkConfig,
 } from '../types';
 import { parseKMLString, parseKMZFile, parseGeoJSON, formatArea } from '../utils/geoUtils';
-import { DEFAULT_PARCEL } from '../data/demoParcels';
 import { ViewerMethods } from './CesiumViewer';
 import { PWAInstallButton } from './PWAInstallButton';
 import { ParcelTab } from './ParcelTab';
@@ -304,29 +303,29 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     <>
       {/* Mobile Floating Action Dock (Visible only on mobile when panel is collapsed) */}
       {isCollapsed && (
-        <div className="sm:hidden fixed bottom-4 inset-x-3 z-40 flex items-center justify-between p-2 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black">
+        <div className="sm:hidden fixed bottom-3 inset-x-2 z-40 flex items-center justify-between gap-1 p-1.5 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black">
           <button
             onClick={() => setIsCollapsed(false)}
-            className="h-11 px-3.5 rounded-xl bg-sky-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition"
+            className="h-10 px-2.5 rounded-xl bg-sky-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-sky-500/20 active:scale-95 transition shrink-0 cursor-pointer"
           >
             <Sliders className="w-4 h-4" />
             <span>Stüdyo</span>
           </button>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             {/* GPS Konum Butonu */}
             <button
               onClick={() => viewerMethods?.flyToDeviceLocation()}
-              className="h-11 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 text-sky-300 flex items-center gap-1.5 active:scale-95 transition"
+              className="h-10 px-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 text-sky-300 flex items-center gap-1 active:scale-95 transition cursor-pointer"
               title="Konumuma Git (GPS)"
             >
               <LocateFixed className="w-4 h-4 text-sky-400" />
-              <span className="text-[11px] font-bold text-sky-200">Konumum</span>
+              <span className="text-[11px] font-bold text-sky-200">Konum</span>
             </button>
 
             <button
               onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
-              className={`w-11 h-11 rounded-xl border flex items-center justify-center transition active:scale-95 ${
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition active:scale-95 cursor-pointer ${
                 cameraState.isTouring
                   ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-lg shadow-red-500/30'
                   : 'bg-white/10 text-sky-400 border-white/15'
@@ -338,7 +337,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             <button
               onClick={() => viewerMethods?.takeSnapshot()}
-              className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white flex items-center justify-center active:scale-95 transition"
+              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white flex items-center justify-center active:scale-95 transition cursor-pointer"
               title="HD Fotoğraf"
             >
               <CameraIcon className="w-4 h-4 text-sky-400" />
@@ -347,7 +346,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {viewerMethods?.isRecording ? (
               <button
                 onClick={() => viewerMethods.stopVideoRecording()}
-                className="h-11 px-3 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/40 animate-pulse active:scale-95"
+                className="h-10 px-2.5 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1 shadow-lg shadow-red-600/40 animate-pulse active:scale-95 cursor-pointer"
               >
                 <Square className="w-3.5 h-3.5 fill-white" />
                 <span>Durdur</span>
@@ -358,7 +357,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   if (!cameraState.isTouring) onCameraChange({ isTouring: true });
                   viewerMethods?.startVideoRecording();
                 }}
-                className="h-11 px-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-500/30 active:scale-95"
+                className="h-10 px-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold text-xs flex items-center gap-1 shadow-lg shadow-red-500/30 active:scale-95 cursor-pointer"
               >
                 <VideoIcon className="w-4 h-4" />
                 <span>Kayıt</span>
