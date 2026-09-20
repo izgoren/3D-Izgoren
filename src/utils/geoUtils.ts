@@ -153,7 +153,8 @@ export function parseKMLString(kmlText: string, defaultName = 'Yüklenen Parsel'
     const area = calculateArea(parsedCoords);
     const perimeter = calculatePerimeter(parsedCoords);
 
-    // Try extracting Ada/Parsel/City/District from KML extended data or name
+    // Try extracting Ada/Parsel/City/District from KML extended data, description or name
+    let city = '';
     let adaNo = '';
     let parselNo = '';
     let district = '';
@@ -167,22 +168,36 @@ export function parseKMLString(kmlText: string, defaultName = 'Yüklenen Parsel'
       if (nameMatch[2]) parselNo = nameMatch[2];
     }
 
-    // ExtendedData parsing
+    // ExtendedData parsing (TKGM Parsel Sorgu, Netcad, CAD, Google Earth)
     const simpleDatas = xml.querySelectorAll('SimpleData, Data');
     simpleDatas.forEach((sd) => {
       const attrName = (sd.getAttribute('name') || '').toLowerCase();
       const textVal = sd.textContent?.trim() || '';
       if (!textVal) return;
-      if (attrName.includes('ada')) adaNo = textVal;
+      if (attrName === 'il' || attrName.includes('ilad') || attrName.includes('city') || attrName.includes('province') || attrName.includes('sehir')) city = textVal;
+      else if (attrName.includes('ada')) adaNo = textVal;
       else if (attrName.includes('parsel')) parselNo = textVal;
       else if (attrName.includes('ilce') || attrName.includes('district')) district = textVal;
       else if (attrName.includes('mahalle') || attrName.includes('koy')) neighborhood = textVal;
     });
 
+    // Also check description table tags if SimpleData was empty
+    if (!city || !district || !adaNo) {
+      const descText = xml.querySelector('description')?.textContent || '';
+      if (descText) {
+        const ilMatch = descText.match(/(?:İl|il|IL)\s*[:<\/td>\s]+([A-ZÇĞİÖŞÜa-zçğıöşü]+)/);
+        if (ilMatch && !city) city = ilMatch[1].trim();
+        const ilceMatch = descText.match(/(?:İlçe|ilce|ILCE)\s*[:<\/td>\s]+([A-ZÇĞİÖŞÜa-zçğıöşü]+)/);
+        if (ilceMatch && !district) district = ilceMatch[1].trim();
+        const mahMatch = descText.match(/(?:Mahalle|mahalle|Köy|koy)\s*[:<\/td>\s]+([A-ZÇĞİÖŞÜa-zçğıöşü0-9\s]+)/);
+        if (mahMatch && !neighborhood) neighborhood = mahMatch[1].trim();
+      }
+    }
+
     return {
       id: 'kml-' + Date.now(),
       name,
-      city: 'Özel Konum',
+      city: city || 'Parsel Konumu',
       district: district || undefined,
       neighborhood: neighborhood || undefined,
       adaNo: adaNo || undefined,

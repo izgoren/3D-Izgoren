@@ -384,6 +384,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const isRecordingRef = useRef<boolean>(false);
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
+  const isFlyingRef = useRef<boolean>(false);
 
   // Synchronized refs to decouple metadata updates (watermark) from 3D map engine lifecycle
   const activeParcelRef = useRef<ParcelInfo | null>(activeParcel);
@@ -545,7 +546,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   // Update Camera
   const updateCameraView = useCallback(() => {
     const viewer = viewerRef.current;
-    if (!viewer || !parcelCenterRef.current || typeof Cesium === 'undefined') return;
+    if (!viewer || !parcelCenterRef.current || typeof Cesium === 'undefined' || isFlyingRef.current) return;
 
     try {
       viewer.camera.lookAt(
@@ -565,21 +566,31 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, []);
 
-  // Center camera precisely on the loaded parcel taking 3D terrain into account
+  // Center camera precisely on the loaded parcel and immediately pre-stream satellite tiles
   const centerOnParcel = useCallback(
-    (duration: number = 0.9) => {
+    (duration: number = 0.8, targetParcelOverride?: ParcelInfo) => {
       const viewer = viewerRef.current;
-      const targetParcel = activeParcelRef.current;
+      const targetParcel = targetParcelOverride || activeParcelRef.current || activeParcel;
       if (!viewer || typeof Cesium === 'undefined' || !targetParcel || !targetParcel.coordinates || targetParcel.coordinates.length < 3) return;
 
       try {
         const coords = targetParcel.coordinates;
         let sumLng = 0;
         let sumLat = 0;
+        let minLng = 180;
+        let maxLng = -180;
+        let minLat = 90;
+        let maxLat = -90;
+
         coords.forEach((c) => {
           sumLng += c.lng;
           sumLat += c.lat;
+          if (c.lng < minLng) minLng = c.lng;
+          if (c.lng > maxLng) maxLng = c.lng;
+          if (c.lat < minLat) minLat = c.lat;
+          if (c.lat > maxLat) maxLat = c.lat;
         });
+
         const centerLng = sumLng / coords.length;
         const centerLat = sumLat / coords.length;
 
@@ -596,44 +607,77 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLng, centerLat, terrainHeight);
         parcelCenterRef.current = centerCartesian;
 
-        // Compute optimal camera distance from parcel radius
+        // Calculate bounding box with padding to frame parcel and preload surrounding satellite tiles
+        const spanLng = Math.max(maxLng - minLng, 0.0006);
+        const spanLat = Math.max(maxLat - minLat, 0.0006);
+        const padRatio = 0.35;
+        const parcelRect = Cesium.Rectangle.fromDegrees(
+          minLng - spanLng * padRatio,
+          minLat - spanLat * padRatio,
+          maxLng + spanLng * padRatio,
+          maxLat + spanLat * padRatio
+        );
+
+        // Optimal range estimate
         const cartesianPoints = coords.map((c) =>
           Cesium.Cartesian3.fromDegrees(c.lng, c.lat, terrainHeight)
         );
         const boundingSphere = Cesium.BoundingSphere.fromPoints(cartesianPoints);
-        const radius = Math.max(boundingSphere.radius || 100, 40);
-        // Optimal range: perfectly frames parcel inside screen for both 9:16 mobile and 16:9 PC
+        const radius = Math.max(boundingSphere.radius || 80, 30);
         const optimalRange = Math.max(160, Math.min(3200, Math.round(radius * 2.5)));
         rangeRef.current = optimalRange;
-        onCameraChangeRef.current({ range: optimalRange });
 
-        // Smoothly and swiftly fly camera to center parcel on 3D terrain without stratospheric ascent
-        const targetSphere = new Cesium.BoundingSphere(centerCartesian, radius);
-        viewer.camera.flyToBoundingSphere(targetSphere, {
+        // Prevent state re-renders from interrupting the smooth camera flight
+        isFlyingRef.current = true;
+
+        // Synchronize canvas dimensions immediately
+        try {
+          viewer.resize();
+        } catch (e) {}
+
+        // Release any existing lock on lookAt transform
+        try {
+          viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        } catch (e) {}
+
+        // Smooth flight directly into the parcel rectangle:
+        // Using destination: parcelRect immediately causes Cesium to stream high-resolution satellite imagery
+        // for this exact parcel region during the flight so tiles are crisp on arrival.
+        viewer.camera.flyTo({
+          destination: parcelRect,
+          orientation: {
+            heading: Cesium.Math.toRadians(headingRef.current),
+            pitch: Cesium.Math.toRadians(pitchRef.current),
+            roll: 0.0,
+          },
           duration: duration,
-          offset: new Cesium.HeadingPitchRange(
-            Cesium.Math.toRadians(headingRef.current),
-            Cesium.Math.toRadians(pitchRef.current),
-            optimalRange
-          ),
-          maximumHeight: Math.min(optimalRange * 2.0, 2600),
-          pitchAdjustHeight: 1000,
+          maximumHeight: Math.min(optimalRange * 1.5, 2000),
+          pitchAdjustHeight: 600,
           complete: () => {
+            isFlyingRef.current = false;
             try {
               viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-              // Immediately request high-resolution satellite tiles for this parcel
+              if (viewer.camera.positionCartographic) {
+                const actualHeight = Math.round(viewer.camera.positionCartographic.height);
+                rangeRef.current = actualHeight;
+                onCameraChangeRef.current({ range: actualHeight });
+              }
               viewer.scene.requestRender();
             } catch (e) {}
+          },
+          cancel: () => {
+            isFlyingRef.current = false;
           },
         });
       } catch (e) {
         console.warn('centerOnParcel error:', e);
+        isFlyingRef.current = false;
         try {
           viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
         } catch (ignored) {}
       }
     },
-    []
+    [activeParcel]
   );
 
   // Initialize Cesium
@@ -766,12 +810,6 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 viewerRef.current.terrainProvider = terrain;
                 viewerRef.current.scene.globe.depthTestAgainstTerrain = true;
                 viewerRef.current.scene.globe.terrainExaggeration = 1.8;
-                // Sadece aktif parsel varsa parseli ortala
-                if (activeParcelRef.current && activeParcelRef.current.coordinates.length >= 3) {
-                  setTimeout(() => {
-                    centerOnParcel(1.2);
-                  }, 350);
-                }
               }
             }
           } catch (terrainErr) {
@@ -977,7 +1015,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       // SADECE ve SADECE YENİ BİR PARSEL YÜKLENDİĞİNDE KAMERAYI ODAKLA
       // İl, ilçe, ada, parsel, fiyat gibi parsel ekranındaki metin değişikliklerinde kamerayı asla oynatma ve altlık haritayı yenileme!
       if (isNewGeometry) {
-        centerOnParcel(0.9);
+        centerOnParcel(0.8, activeParcel);
       }
     } catch (err) {
       console.error('Parcel render error:', err);
@@ -1245,8 +1283,8 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   }, []);
 
   const flyToParcel = useCallback(() => {
-    centerOnParcel(1.5);
-  }, [centerOnParcel]);
+    centerOnParcel(0.8, activeParcel);
+  }, [centerOnParcel, activeParcel]);
 
   const flyToDeviceLocation = useCallback(() => {
     const viewer = viewerRef.current;
