@@ -567,7 +567,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
   // Center camera precisely on the loaded parcel taking 3D terrain into account
   const centerOnParcel = useCallback(
-    (duration: number = 1.4) => {
+    (duration: number = 0.9) => {
       const viewer = viewerRef.current;
       const targetParcel = activeParcelRef.current;
       if (!viewer || typeof Cesium === 'undefined' || !targetParcel || !targetParcel.coordinates || targetParcel.coordinates.length < 3) return;
@@ -601,12 +601,13 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           Cesium.Cartesian3.fromDegrees(c.lng, c.lat, terrainHeight)
         );
         const boundingSphere = Cesium.BoundingSphere.fromPoints(cartesianPoints);
-        const radius = boundingSphere.radius || 150;
-        const optimalRange = Math.max(280, Math.min(4500, Math.round(radius * 3.2)));
+        const radius = Math.max(boundingSphere.radius || 100, 40);
+        // Optimal range: perfectly frames parcel inside screen for both 9:16 mobile and 16:9 PC
+        const optimalRange = Math.max(160, Math.min(3200, Math.round(radius * 2.5)));
         rangeRef.current = optimalRange;
         onCameraChangeRef.current({ range: optimalRange });
 
-        // Smoothly fly camera to center parcel on 3D terrain
+        // Smoothly and swiftly fly camera to center parcel on 3D terrain without stratospheric ascent
         const targetSphere = new Cesium.BoundingSphere(centerCartesian, radius);
         viewer.camera.flyToBoundingSphere(targetSphere, {
           duration: duration,
@@ -615,9 +616,13 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             Cesium.Math.toRadians(pitchRef.current),
             optimalRange
           ),
+          maximumHeight: Math.min(optimalRange * 2.0, 2600),
+          pitchAdjustHeight: 1000,
           complete: () => {
             try {
               viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+              // Immediately request high-resolution satellite tiles for this parcel
+              viewer.scene.requestRender();
             } catch (e) {}
           },
         });
@@ -674,9 +679,9 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           },
         });
 
-        // Set device resolution scale for high-DPI (Retina, 4K, Mobile, Tablet) crystal clarity
+        // Set device resolution scale: capped at 1.35x to avoid mobile GPU thermal stuttering while preserving crisp details
         const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-        viewer.resolutionScale = Math.min(Math.max(dpr, 1.0), 2.0);
+        viewer.resolutionScale = Math.min(dpr, 1.35);
 
         // Ensure touch and gesture controls are active on mobile devices (Android & iOS)
         if (viewer.scene.screenSpaceCameraController) {
@@ -703,12 +708,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
-        // Optimize scene for smooth 60fps performance and rock-solid stability
-        viewer.scene.globe.maximumScreenSpaceError = 1.6; // Balanced crispness and bandwidth/FPS (1.25 causes severe tile churn on mobile)
-        viewer.scene.globe.tileCacheSize = 250; // Optimized RAM/VRAM footprint for rock-solid stability and prevention of browser tab crashes
-        viewer.scene.globe.loadingDescendantLimit = 16;
+        // Optimize scene for smooth 60fps performance and fast satellite tile streaming
+        viewer.scene.globe.maximumScreenSpaceError = 1.5; // Fast tile loading and crisp imagery
+        viewer.scene.globe.tileCacheSize = 350; // Keep surrounding tiles cached to prevent re-fetching during 3D tours
+        viewer.scene.globe.loadingDescendantLimit = 24; // Stream parcel area tiles with high throughput
         viewer.scene.globe.preloadAncestors = true;
-        viewer.scene.globe.preloadSiblings = false; // Reduces network contention on mobile connections
+        viewer.scene.globe.preloadSiblings = false; // Prevents bandwidth contention
 
         // Set initial camera view to display flat satellite map over Turkey / region
         const initialMapCenter = Cesium.Cartesian3.fromDegrees(35.0, 39.0, 0);
@@ -948,44 +953,22 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       });
       createdEntities.push(mainEntity);
 
-      // 2. Canlı Su Akışı Animasyonu (Sınır hattı boyunca su gibi kesintisiz, pürüzsüz dalga akışı)
-      if (parcelStyle.animateLine) {
-        // Birincil Su Akışı Dalgası
-        const waterWaveEntity1 = viewer.entities.add({
-          name: `${activeParcel.name || 'Parsel'} - Su Akışı 1`,
+      // 2. Canlı Vurgu ve Sınır Çizgisi (GPU Donanım Hızlandırmalı, 0 CPU yükü, 60+ FPS)
+      if (parcelStyle.animateLine || parcelStyle.glowEffect) {
+        const glowOutline = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Canlı Vurgu`,
           polyline: {
-            positions: new Cesium.CallbackProperty(() => {
-              // 3.2 saniyelik pürüzsüz sürekli su döngüsü
-              const t = (Date.now() % 3200) / 3200;
-              return getSmoothPerimeterWaterFlow(coords, t, t + 0.32, 40);
-            }, false),
+            positions: cartesianPoints,
             width: parcelStyle.borderWidth + 4,
             material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.45,
-              color: Cesium.Color.fromCssColorString('#38bdf8'),
-            }),
-            clampToGround: true,
-          },
-        });
-        createdEntities.push(waterWaveEntity1);
-
-        // İkincil Karşıt Su Dalgası (Kesintisiz çift su dalgası görünümü)
-        const waterWaveEntity2 = viewer.entities.add({
-          name: `${activeParcel.name || 'Parsel'} - Su Akışı 2`,
-          polyline: {
-            positions: new Cesium.CallbackProperty(() => {
-              const t = ((Date.now() + 1600) % 3200) / 3200;
-              return getSmoothPerimeterWaterFlow(coords, t, t + 0.28, 36);
-            }, false),
-            width: parcelStyle.borderWidth + 2,
-            material: new Cesium.PolylineGlowMaterialProperty({
               glowPower: 0.35,
-              color: Cesium.Color.fromCssColorString('#a5f3fc'),
+              taperPower: 0.85,
+              color: Cesium.Color.fromCssColorString(parcelStyle.borderColor || '#38bdf8'),
             }),
-            clampToGround: true,
+            clampToGround: parcelStyle.extrusionHeight === 0,
           },
         });
-        createdEntities.push(waterWaveEntity2);
+        createdEntities.push(glowOutline);
       }
 
       parcelEntitiesRef.current = createdEntities;
@@ -994,12 +977,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       // SADECE ve SADECE YENİ BİR PARSEL YÜKLENDİĞİNDE KAMERAYI ODAKLA
       // İl, ilçe, ada, parsel, fiyat gibi parsel ekranındaki metin değişikliklerinde kamerayı asla oynatma ve altlık haritayı yenileme!
       if (isNewGeometry) {
-        centerOnParcel(1.4);
+        centerOnParcel(0.9);
       }
     } catch (err) {
       console.error('Parcel render error:', err);
     }
-  }, [parcelGeometryKey, parcelStyle, centerOnParcel]);
+  }, [parcelGeometryKey, parcelStyle, isCesiumReady, centerOnParcel]);
 
   // Handle format change & trigger resize
   useEffect(() => {

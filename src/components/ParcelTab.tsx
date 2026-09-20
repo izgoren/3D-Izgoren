@@ -7,6 +7,7 @@ import {
   FileCode2,
   Home,
   Trash2,
+  Crosshair,
 } from 'lucide-react';
 import { ParcelInfo } from '../types';
 import { formatArea } from '../utils/geoUtils';
@@ -21,6 +22,7 @@ interface ParcelTabProps {
   uploadLoading: boolean;
   uploadMsg: { text: string; isError: boolean } | null;
   onClearParcel?: () => void;
+  onCenterOnParcel?: () => void;
 }
 
 export const ParcelTab: React.FC<ParcelTabProps> = ({
@@ -32,6 +34,7 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
   uploadLoading,
   uploadMsg,
   onClearParcel,
+  onCenterOnParcel,
 }) => {
   const areaDetails = activeParcel ? formatArea(activeParcel.areaM2) : null;
 
@@ -244,9 +247,23 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
             </div>
           )}
 
+          {/* Parseli Ekrana Ortala Butonu */}
+          {onCenterOnParcel && (
+            <div className="pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={onCenterOnParcel}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 active:scale-98 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition cursor-pointer"
+              >
+                <Crosshair className="w-4 h-4 text-slate-950" />
+                <span>⚡ Parseli Ekrana Ortala (Kamera Odakla)</span>
+              </button>
+            </div>
+          )}
+
           {/* Parseli Kapat / Tanıtım Ekranına Dön */}
           {onClearParcel && (
-            <div className="pt-2 border-t border-white/10">
+            <div className="pt-1.5 border-t border-white/10">
               <button
                 type="button"
                 onClick={onClearParcel}

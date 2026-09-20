@@ -483,32 +483,37 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Viewport: İzgören Harita Reklam Ekranı veya 3D Cesium Altlık Harita Ekranı */}
+      {/* Main Viewport: 3D Cesium Altlık Harita (Arka planda daima hazır ve sıcak) & Reklam / Dosya Yükleme Ekranı */}
       <main className="w-full h-full flex-1 relative overflow-hidden">
-        {isParcelLoaded ? (
-          <CesiumViewer
-            baseMap={baseMap}
-            videoFormat={videoFormat}
-            cameraState={cameraState}
-            onCameraChange={handleCameraChange}
-            activeParcel={activeParcel}
-            parcelStyle={parcelStyle}
-            watermarkConfig={watermarkConfig}
-            isTerrainActive={isTerrainActive}
-            onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
-            onViewerReady={setViewerMethods}
-            screenHeightPercent={screenHeightPercent}
-          >
-            {/* Watermark rendered INSIDE the Cesium container */}
+        <CesiumViewer
+          baseMap={baseMap}
+          videoFormat={videoFormat}
+          cameraState={cameraState}
+          onCameraChange={handleCameraChange}
+          activeParcel={activeParcel}
+          parcelStyle={parcelStyle}
+          watermarkConfig={watermarkConfig}
+          isTerrainActive={isTerrainActive}
+          onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
+          onViewerReady={setViewerMethods}
+          screenHeightPercent={screenHeightPercent}
+        >
+          {/* Watermark rendered INSIDE the Cesium container when parcel is active */}
+          {isParcelLoaded && (
             <WatermarkOverlay config={watermarkConfig} activeParcel={activeParcel} />
-          </CesiumViewer>
-        ) : (
-          <IzgorenAdScreen
-            onUploadFile={handleFileUpload}
-            fileInputRef={fileInputRef}
-            uploadLoading={uploadLoading}
-            uploadMsg={uploadMsg}
-          />
+          )}
+        </CesiumViewer>
+
+        {/* Tanıtım ve Dosya Yükleme Ekranı (Parsel yüklü değilken üst katmanda tam ekran gösterilir, yükleme anında akıcı kaybolur) */}
+        {!isParcelLoaded && (
+          <div className="absolute inset-0 z-20 overflow-y-auto bg-slate-950">
+            <IzgorenAdScreen
+              onUploadFile={handleFileUpload}
+              fileInputRef={fileInputRef}
+              uploadLoading={uploadLoading}
+              uploadMsg={uploadMsg}
+            />
+          </div>
         )}
       </main>
 

@@ -494,6 +494,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 uploadLoading={uploadLoading}
                 uploadMsg={uploadMsg}
                 onClearParcel={onClearParcel}
+                onCenterOnParcel={() => viewerMethods?.flyToParcel()}
               />
             )}
             
