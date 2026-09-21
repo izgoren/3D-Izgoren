@@ -198,14 +198,16 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
       </div>
 
       {/* 3. AKTİF PARSEL DETAY KARTI VEYA BAŞLANGIÇ DURUMU */}
-      {activeParcel && areaDetails ? (
+      {activeParcel ? (
         <div className="p-3.5 rounded-xl bg-white/5 border border-sky-400/30 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-white truncate">
-              {activeParcel.name}
+              {activeParcel.name || 'Özel Parsel Bilgisi'}
             </span>
             <span className="text-[10px] text-sky-400 font-mono">
-              {activeParcel.coordinates?.length || 0} Köşe Noktası
+              {activeParcel.coordinates && activeParcel.coordinates.length >= 3
+                ? `${activeParcel.coordinates.length} Köşe Noktası`
+                : 'Manuel Giriş (KML Yok)'}
             </span>
           </div>
 
@@ -213,27 +215,31 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
             <div className="p-2 rounded-lg bg-black/40 border border-white/5">
               <span className="text-[10px] text-slate-400 block">Parsel Alanı:</span>
               <span className="text-xs font-bold text-amber-300 font-mono">
-                {areaDetails.m2}
+                {areaDetails?.m2 || (activeParcel.areaM2 ? `${activeParcel.areaM2.toLocaleString('tr-TR')} m²` : '0 m²')}
               </span>
-              <span className="text-[10px] text-slate-400 block">
-                ({areaDetails.donum})
-              </span>
+              {areaDetails?.donum && (
+                <span className="text-[10px] text-slate-400 block">
+                  ({areaDetails.donum})
+                </span>
+              )}
             </div>
 
             <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-              <span className="text-[10px] text-slate-400 block">Çevre Uzunluğu:</span>
-              <span className="text-xs font-bold text-sky-300 font-mono">
-                {activeParcel.perimeterM?.toLocaleString('tr-TR') || '0'} m
+              <span className="text-[10px] text-slate-400 block">Konum:</span>
+              <span className="text-xs font-bold text-sky-300 truncate block" title={`${activeParcel.city || ''} ${activeParcel.district || ''}`}>
+                {[activeParcel.city, activeParcel.district].filter(Boolean).join(' / ') || 'Belirtilmedi'}
               </span>
-              <span className="text-[10px] text-slate-400 block">Sınır Çiti</span>
+              <span className="text-[10px] text-slate-400 block truncate">
+                {activeParcel.neighborhood || 'Mevkii -'}
+              </span>
             </div>
           </div>
 
-          {activeParcel.adaNo && (
+          {(activeParcel.adaNo || activeParcel.parselNo) && (
             <div className="text-[11px] text-slate-300 flex items-center justify-between border-t border-white/10 pt-2">
               <span>Ada / Parsel:</span>
               <span className="font-mono font-bold text-white">
-                Ada {activeParcel.adaNo} • Parsel {activeParcel.parselNo}
+                Ada {activeParcel.adaNo || '-'} • Parsel {activeParcel.parselNo || '-'}
               </span>
             </div>
           )}
@@ -247,8 +253,8 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
             </div>
           )}
 
-          {/* Parseli Ekrana Ortala Butonu */}
-          {onCenterOnParcel && (
+          {/* Parseli Ekrana Ortala Butonu (Sadece koordinat varsa) */}
+          {onCenterOnParcel && activeParcel.coordinates && activeParcel.coordinates.length >= 3 && (
             <div className="pt-2 border-t border-white/10">
               <button
                 type="button"
@@ -261,7 +267,7 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
             </div>
           )}
 
-          {/* Parseli Kapat / Tanıtım Ekranına Dön */}
+          {/* Parsel Bilgilerini Sıfırla */}
           {onClearParcel && (
             <div className="pt-1.5 border-t border-white/10">
               <button
@@ -270,7 +276,7 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
                 className="w-full py-2 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-sky-400/30 hover:border-sky-400/60 text-sky-300 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
               >
                 <Home className="w-3.5 h-3.5 text-sky-400" />
-                <span>Parseli Kapat (İzgören Harita Ekranına Dön)</span>
+                <span>Parsel Bilgilerini Sıfırla</span>
               </button>
             </div>
           )}
@@ -279,10 +285,10 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
         <div className="p-3.5 rounded-xl bg-sky-950/40 border border-sky-500/30 space-y-2">
           <div className="flex items-center gap-2 text-sky-400">
             <Globe className="w-4 h-4 text-sky-400 shrink-0" />
-            <span className="text-xs font-bold text-white">Parsel Yüklenmedi</span>
+            <span className="text-xs font-bold text-white">Parsel Bilgileri Girişe Hazır</span>
           </div>
           <p className="text-[11px] text-slate-300 leading-relaxed">
-            3D harita ve filigran oluşturmak için yukarıdaki <strong>Kendi Parsel Dosyanızı Yükleyin</strong> butonundan .KML, .KMZ veya .GeoJSON dosyanızı yükleyebilirsiniz.
+            Yukarıdaki kutulara <strong>İl, İlçe, Mahalle, Ada, Parsel ve Fiyat</strong> yazarak harita filigranına anında ekleyebilirsiniz veya <strong>Kendi Parsel Dosyanızı Yükleyin</strong> butonundan .KML / .KMZ dosyanızı yükleyebilirsiniz.
           </p>
         </div>
       )}

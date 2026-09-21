@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BaseMapType,
   VideoFormatType,
@@ -157,17 +157,73 @@ export default function App() {
     setWatermarkConfig((prev) => ({ ...prev, ...partial }));
   }, []);
 
+  // Açılışta 10 saniye gösterilecek İzgören Harita tanıtım ekranı ve geri sayım durumu
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [splashSecondsLeft, setSplashSecondsLeft] = useState<number>(10);
+
+  useEffect(() => {
+    if (!showSplash) return;
+    const timer = setInterval(() => {
+      setSplashSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setShowSplash(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showSplash]);
+
+  const handleDismissSplash = useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
+  const handleShowSplash = useCallback(() => {
+    setSplashSecondsLeft(10);
+    setShowSplash(true);
+  }, []);
+
   const handleParcelLoaded = useCallback((parcel: ParcelInfo) => {
     setActiveParcel(parcel);
+    setShowSplash(false); // KML yüklenince anında uydu haritasına geç
   }, []);
 
   const handleUpdateParcel = useCallback((partial: Partial<ParcelInfo>) => {
     setActiveParcel((prev) => {
-      if (!prev) return null;
-      return {
+      if (!prev) {
+        const ada = partial.adaNo || '';
+        const parsel = partial.parselNo || '';
+        const fallbackName = ada && parsel ? `Ada ${ada} Parsel ${parsel}` : (partial.name || 'Yeni Parsel');
+        return {
+          id: 'manual-parcel-' + Date.now(),
+          name: fallbackName,
+          city: partial.city ?? '',
+          district: partial.district ?? '',
+          neighborhood: partial.neighborhood ?? '',
+          adaNo: ada,
+          parselNo: parsel,
+          areaM2: partial.areaM2 ?? 0,
+          price: partial.price ?? '',
+          description: partial.description ?? '',
+          coordinates: [],
+          ...partial,
+        };
+      }
+      const updated = {
         ...prev,
         ...partial,
       };
+      // Ada veya Parsel güncellenmiş ve özel ad verilmemişse başlığı senkronize et
+      if (!partial.name && (partial.adaNo !== undefined || partial.parselNo !== undefined)) {
+        const ada = updated.adaNo;
+        const parsel = updated.parselNo;
+        if (ada || parsel) {
+          updated.name = `Ada ${ada || '-'} Parsel ${parsel || '-'}`;
+        }
+      }
+      return updated;
     });
   }, []);
 
@@ -285,7 +341,7 @@ export default function App() {
 
         {/* Sağ Grup: Hızlı Kadraj & Araçlar (Üst Üste Binmeyen & Ekran Boyutuna Uyum Sağlayan Esnek Bar) */}
         <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto shrink-0 max-w-[calc(100vw-135px)] sm:max-w-none overflow-x-auto scrollbar-none py-0.5">
-          {isParcelLoaded ? (
+          {!showSplash ? (
             <>
               {/* Kadraj Hızlı Seçici */}
               <div className="flex items-center gap-0.5 p-0.5 sm:p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shrink-0">
@@ -444,29 +500,50 @@ export default function App() {
                 </button>
               )}
 
-              {/* Tanıtım Ekranına Dön / Parseli Kapat Butonu */}
+              {/* İzgören Harita Tanıtım Ekranını Aç Butonu */}
               <button
-                onClick={handleClearParcel}
+                onClick={handleShowSplash}
                 className="min-h-[32px] sm:min-h-[34px] px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-950/85 hover:bg-slate-900 border border-sky-400/30 hover:border-sky-400 text-sky-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xl shadow-xl transition active:scale-95 cursor-pointer shrink-0"
-                title="İzgören Harita Reklam & Tanıtım Ekranına Dön"
+                title="İzgören Harita Bilgi & Tanıtım Ekranını Göster"
               >
                 <Home className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <span className="hidden sm:inline">İzgören Harita</span>
+                <span className="hidden sm:inline">İzgören Tanıtım</span>
               </button>
+
+              {/* Parseli Temizle Butonu (Parsel yüklüyse) */}
+              {activeParcel && (
+                <button
+                  onClick={handleClearParcel}
+                  className="min-h-[32px] sm:min-h-[34px] px-2 py-1 rounded-xl bg-slate-950/85 hover:bg-red-950/40 border border-white/15 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium flex items-center gap-1 backdrop-blur-xl transition active:scale-95 cursor-pointer shrink-0"
+                  title="Parseli Temizle"
+                >
+                  <span>Sıfırla</span>
+                </button>
+              )}
             </>
           ) : (
-            /* Reklam / Tanıtım Ekranı Üst Çubuğu */
-            <a
-              href="https://www.izgorenharita.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-h-[34px] sm:min-h-[36px] px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-300 hover:to-blue-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-sky-500/25 transition active:scale-95 cursor-pointer shrink-0"
-              title="İzgören Harita Web Sitesine Git"
-            >
-              <Globe className="w-3.5 h-3.5 text-slate-950 shrink-0" />
-              <span>izgorenharita.com</span>
-              <ArrowUpRight className="w-3 h-3 opacity-80 shrink-0" />
-            </a>
+            /* Tanıtım Ekranı Üst Çubuğu: Haritaya Geç & Web Sitesi */
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleDismissSplash}
+                className="min-h-[34px] sm:min-h-[36px] px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-300 hover:to-blue-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-sky-500/25 transition active:scale-95 cursor-pointer shrink-0"
+                title="10 saniye beklemeden doğrudan uydu haritasına geç"
+              >
+                <Globe className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                <span>Haritaya Geç ({splashSecondsLeft}s)</span>
+                <ArrowUpRight className="w-3 h-3 opacity-80 shrink-0" />
+              </button>
+
+              <a
+                href="https://www.izgorenharita.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-h-[34px] sm:min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-white/20 text-white font-semibold text-xs hidden sm:flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                title="İzgören Harita Web Sitesine Git"
+              >
+                <span>izgorenharita.com</span>
+              </a>
+            </div>
           )}
 
           {/* Tam Ekran Toggle */}
@@ -498,20 +575,22 @@ export default function App() {
           onViewerReady={setViewerMethods}
           screenHeightPercent={screenHeightPercent}
         >
-          {/* Watermark rendered INSIDE the Cesium container when parcel is active */}
-          {isParcelLoaded && (
+          {/* Watermark rendered INSIDE the Cesium container when watermark is enabled and parcel exists */}
+          {watermarkConfig.visible && (activeParcel || isParcelLoaded) && (
             <WatermarkOverlay config={watermarkConfig} activeParcel={activeParcel} />
           )}
         </CesiumViewer>
 
-        {/* Tanıtım ve Dosya Yükleme Ekranı (Parsel yüklü değilken üst katmanda tam ekran gösterilir, yükleme anında akıcı kaybolur) */}
-        {!isParcelLoaded && (
-          <div className="absolute inset-0 z-20 overflow-y-auto bg-slate-950">
+        {/* Tanıtım ve Dosya Yükleme Ekranı (Sadece açılışta 10 saniye veya kullanıcı isteğiyle gösterilir) */}
+        {showSplash && (
+          <div className="absolute inset-0 z-20 overflow-y-auto bg-slate-950 transition-opacity duration-300">
             <IzgorenAdScreen
               onUploadFile={handleFileUpload}
               fileInputRef={fileInputRef}
               uploadLoading={uploadLoading}
               uploadMsg={uploadMsg}
+              onDismiss={handleDismissSplash}
+              secondsRemaining={splashSecondsLeft}
             />
           </div>
         )}
