@@ -67,7 +67,7 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
       {/* Separate Floating Ada/Parsel Badge if configured */}
       {config.adaParselPosition !== 'inside' && adaParselDisplay && (
         <div
-          className={`absolute z-30 pointer-events-none transition-all duration-300 ${
+          className={`absolute z-30 pointer-events-none transition-all duration-300 scale-90 sm:scale-95 md:scale-100 ${
             separateBadgePositions[config.adaParselPosition] || 'top-3 left-3 sm:top-6 sm:left-6'
           }`}
           style={{
@@ -76,11 +76,11 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
             transformOrigin: config.adaParselPosition?.includes('right') ? 'top right' : 'top left',
           }}
         >
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-xl border border-amber-400/40 shadow-2xl shadow-black text-amber-300 font-mono text-xs select-none">
-            <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-xl border border-amber-400/40 shadow-2xl shadow-black text-amber-300 font-mono text-[11px] sm:text-xs select-none">
+            <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
             <span className="font-bold tracking-wide">{adaParselDisplay}</span>
             {activeParcel?.areaM2 ? (
-              <span className="text-[10px] text-white/70 border-l border-white/20 pl-2">
+              <span className="text-[9px] sm:text-[10px] text-white/70 border-l border-white/20 pl-1.5 sm:pl-2">
                 {activeParcel.areaM2.toLocaleString('tr-TR')} m²
               </span>
             ) : null}
@@ -88,9 +88,9 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
         </div>
       )}
 
-      {/* Main Watermark Banner */}
+      {/* Main Watermark Banner (Ekrana oranla küçültülmüş & dengeli kompakt tasarım) */}
       <div
-        className={`absolute z-30 pointer-events-none transition-all duration-300 max-w-[calc(100%-1.5rem)] sm:max-w-[360px] ${
+        className={`absolute z-30 pointer-events-none transition-all duration-300 max-w-[calc(100%-2rem)] sm:max-w-[320px] scale-90 sm:scale-95 md:scale-100 ${
           positionClasses[config.position] || positionClasses['bottom-right']
         }`}
         style={{
@@ -99,10 +99,10 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ config, acti
           transformOrigin: getTransformOrigin(config.position),
         }}
       >
-        <div className="flex flex-col gap-2 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/15 shadow-2xl shadow-black/90 text-white select-none">
+        <div className="flex flex-col gap-1.5 sm:gap-2 p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/15 shadow-2xl shadow-black/90 text-white select-none">
           
           {/* Top bar: Logo & Company / Brand Name */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {config.logoUrl ? (
               <img
                 src={config.logoUrl}

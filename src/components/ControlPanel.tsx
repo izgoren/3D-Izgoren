@@ -900,7 +900,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </button>
                   <button
                     onClick={() => onCameraChange({ pitch: -90, heading: 0 })}
-                    className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 font-medium text-center cursor-pointer"
+                    className={`py-1.5 px-2 rounded-lg border text-[10px] font-semibold text-center cursor-pointer transition-all ${
+                      cameraState.pitch <= -85
+                        ? 'bg-sky-500/25 border-sky-400/80 text-sky-200 shadow-sm'
+                        : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+                    }`}
                   >
                     Kuşbakışı
                   </button>

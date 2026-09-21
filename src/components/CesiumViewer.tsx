@@ -23,6 +23,7 @@ interface CesiumViewerProps {
   onToggleTerrain: () => void;
   onViewerReady?: (methods: ViewerMethods) => void;
   screenHeightPercent?: number;
+  showMapControls?: boolean;
   children?: React.ReactNode;
 }
 
@@ -366,6 +367,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   onToggleTerrain,
   onViewerReady,
   screenHeightPercent = 100,
+  showMapControls = true,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -640,35 +642,62 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
         } catch (e) {}
 
-        // Smooth flight directly into the parcel rectangle:
-        // Using destination: parcelRect immediately causes Cesium to stream high-resolution satellite imagery
-        // for this exact parcel region during the flight so tiles are crisp on arrival.
-        viewer.camera.flyTo({
-          destination: parcelRect,
-          orientation: {
-            heading: Cesium.Math.toRadians(headingRef.current),
-            pitch: Cesium.Math.toRadians(pitchRef.current),
-            roll: 0.0,
-          },
-          duration: duration,
-          maximumHeight: Math.min(optimalRange * 1.5, 2000),
-          pitchAdjustHeight: 600,
-          complete: () => {
-            isFlyingRef.current = false;
-            try {
-              viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-              if (viewer.camera.positionCartographic) {
-                const actualHeight = Math.round(viewer.camera.positionCartographic.height);
-                rangeRef.current = actualHeight;
-                onCameraChangeRef.current({ range: actualHeight });
-              }
-              viewer.scene.requestRender();
-            } catch (e) {}
-          },
-          cancel: () => {
-            isFlyingRef.current = false;
-          },
-        });
+        // Varsayılan ayar: Kuşbakışı görüntü (-89.9° dik açı) ve KML ekrana tam ortalı
+        const targetPitchDeg = pitchRef.current <= -85 ? -89.9 : pitchRef.current;
+        const targetPitchRad = Cesium.Math.toRadians(targetPitchDeg);
+        const targetHeadingRad = Cesium.Math.toRadians(headingRef.current || 0);
+
+        // KML parselini ekrana tam ortalayarak kuşbakışı odaklan
+        try {
+          viewer.camera.flyToBoundingSphere(boundingSphere, {
+            offset: new Cesium.HeadingPitchRange(
+              targetHeadingRad,
+              targetPitchRad,
+              optimalRange
+            ),
+            duration: duration,
+            complete: () => {
+              isFlyingRef.current = false;
+              try {
+                viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+                if (viewer.camera.positionCartographic) {
+                  const actualHeight = Math.round(viewer.camera.positionCartographic.height);
+                  rangeRef.current = actualHeight;
+                  onCameraChangeRef.current({ range: actualHeight });
+                }
+                viewer.scene.requestRender();
+              } catch (e) {}
+            },
+            cancel: () => {
+              isFlyingRef.current = false;
+            },
+          });
+        } catch (flyErr) {
+          // Fallback: Doğrudan merkez kartesyen koordinatına kuşbakışı uç
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              centerLng,
+              centerLat,
+              terrainHeight + optimalRange
+            ),
+            orientation: {
+              heading: targetHeadingRad,
+              pitch: targetPitchRad,
+              roll: 0.0,
+            },
+            duration: duration,
+            complete: () => {
+              isFlyingRef.current = false;
+              try {
+                viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+                viewer.scene.requestRender();
+              } catch (e) {}
+            },
+            cancel: () => {
+              isFlyingRef.current = false;
+            },
+          });
+        }
       } catch (e) {
         console.warn('centerOnParcel error:', e);
         isFlyingRef.current = false;
@@ -1562,62 +1591,64 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           </div>
         )}
 
-        {/* Ekran Sağı Dikey Çubuk: 3D Arazi (Aktif / Pasif) & GPS Konum Butonu */}
-        <div className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 sm:gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/80 select-none">
-          {/* 3D Arazi (Aktif / Pasif) Butonu */}
-          <button
-            id="btn-terrain-toggle-vertical"
-            onClick={onToggleTerrain}
-            className={`group relative flex flex-col items-center justify-center w-12 sm:w-14 py-2 px-1 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
-              isTerrainActive
-                ? 'bg-emerald-500/20 border-emerald-400/80 text-emerald-300 shadow-lg shadow-emerald-500/20'
-                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
-            }`}
-            title={
-              isTerrainActive
-                ? '3D Arazi Topoğrafyası Aktif (Kapatmak için dokunun)'
-                : '3D Arazi Topoğrafyası Pasif (Açmak için dokunun)'
-            }
-          >
-            <Mountain
-              className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
-                isTerrainActive ? 'text-emerald-400' : 'text-slate-400'
-              }`}
-            />
-            <span className="text-[10px] font-bold mt-1 tracking-tight">3D</span>
-            <span
-              className={`mt-0.5 px-1 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase leading-none ${
+        {/* Ekran Sağı Dikey Çubuk: 3D Arazi (Aktif / Pasif) & GPS Konum Butonu - Ekrana oranla küçültülmüş & sadece altlık harita ekranında gösterilir */}
+        {showMapControls && (
+          <div className="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none scale-75 sm:scale-85 md:scale-90 lg:scale-100 origin-right transition-all">
+            {/* 3D Arazi (Aktif / Pasif) Butonu */}
+            <button
+              id="btn-terrain-toggle-vertical"
+              onClick={onToggleTerrain}
+              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
                 isTerrainActive
-                  ? 'bg-emerald-400 text-slate-950 shadow-sm'
-                  : 'bg-white/10 text-slate-400'
+                  ? 'bg-emerald-500/20 border-emerald-400/80 text-emerald-300 shadow-md shadow-emerald-500/20'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
               }`}
+              title={
+                isTerrainActive
+                  ? '3D Arazi Topoğrafyası Aktif (Kapatmak için dokunun)'
+                  : '3D Arazi Topoğrafyası Pasif (Açmak için dokunun)'
+              }
             >
-              {isTerrainActive ? 'AKTİF' : 'PASİF'}
-            </span>
-          </button>
+              <Mountain
+                className={`w-4 h-4 transition-transform duration-200 group-hover:scale-110 ${
+                  isTerrainActive ? 'text-emerald-400' : 'text-slate-400'
+                }`}
+              />
+              <span className="text-[9px] font-bold mt-0.5 tracking-tight leading-tight">3D</span>
+              <span
+                className={`mt-0.5 px-1 py-0.5 rounded text-[7px] font-black tracking-wider uppercase leading-none ${
+                  isTerrainActive
+                    ? 'bg-emerald-400 text-slate-950 font-bold'
+                    : 'bg-white/10 text-slate-400'
+                }`}
+              >
+                {isTerrainActive ? 'AKTİF' : 'PASİF'}
+              </span>
+            </button>
 
-          {/* Dikey Ayırıcı Çizgi */}
-          <div className="w-8 h-px bg-white/10 my-0.5" />
+            {/* Dikey Ayırıcı Çizgi */}
+            <div className="w-5 h-px bg-white/10 my-0.5" />
 
-          {/* GPS Konum Butonu */}
-          <button
-            id="btn-floating-my-location"
-            onClick={flyToDeviceLocation}
-            className="group relative flex flex-col items-center justify-center w-12 sm:w-14 py-2 px-1 rounded-xl bg-white/5 hover:bg-sky-500/20 active:bg-sky-500/30 border border-white/10 hover:border-sky-400/60 text-slate-200 hover:text-sky-300 transition-all duration-200 active:scale-95 cursor-pointer"
-            title="Cihazımın GPS Konumuna Git"
-          >
-            <div className="relative flex items-center justify-center">
-              <span className="absolute -inset-1 rounded-full bg-sky-400/20 group-hover:animate-ping opacity-0 group-hover:opacity-100 transition" />
-              <LocateFixed className="w-5 h-5 text-sky-400 group-hover:scale-110 group-hover:rotate-45 transition duration-200" />
-            </div>
-            <span className="text-[10px] font-bold mt-1 text-slate-300 group-hover:text-sky-300 tracking-tight">
-              Konum
-            </span>
-            <span className="mt-0.5 px-1 py-0.5 rounded text-[8px] font-semibold text-sky-400/80 font-mono leading-none">
-              GPS
-            </span>
-          </button>
-        </div>
+            {/* GPS Konum Butonu */}
+            <button
+              id="btn-floating-my-location"
+              onClick={flyToDeviceLocation}
+              className="group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg bg-white/5 hover:bg-sky-500/20 active:bg-sky-500/30 border border-white/10 hover:border-sky-400/60 text-slate-200 hover:text-sky-300 transition-all duration-200 active:scale-95 cursor-pointer"
+              title="Cihazımın GPS Konumuna Git"
+            >
+              <div className="relative flex items-center justify-center">
+                <span className="absolute -inset-1 rounded-full bg-sky-400/20 group-hover:animate-ping opacity-0 group-hover:opacity-100 transition" />
+                <LocateFixed className="w-4 h-4 text-sky-400 group-hover:scale-110 transition duration-200" />
+              </div>
+              <span className="text-[9px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
+                Konum
+              </span>
+              <span className="mt-0.5 px-1 py-0.5 rounded text-[7px] font-semibold text-sky-400/80 font-mono leading-none">
+                GPS
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Custom Watermark Overlay */}
         {children}

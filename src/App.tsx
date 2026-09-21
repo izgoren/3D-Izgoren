@@ -50,9 +50,9 @@ export default function App() {
     return false;
   });
 
-  // 3D Camera State
+  // 3D Camera State - Varsayılan ayar: Kuşbakışı görüntü (pitch: -90, heading: 0)
   const [cameraState, setCameraState] = useState<CameraState>({
-    pitch: -45,
+    pitch: -90,
     heading: 0,
     range: 650,
     tourSpeed: 0.3,
@@ -188,6 +188,12 @@ export default function App() {
   const handleParcelLoaded = useCallback((parcel: ParcelInfo) => {
     setActiveParcel(parcel);
     setShowSplash(false); // KML yüklenince anında uydu haritasına geç
+    // Varsayılan ayar kuşbakışı görüntü (-90° dik açı)
+    setCameraState((prev) => ({
+      ...prev,
+      pitch: -90,
+      heading: 0,
+    }));
   }, []);
 
   const handleUpdateParcel = useCallback((partial: Partial<ParcelInfo>) => {
@@ -574,9 +580,10 @@ export default function App() {
           onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
           onViewerReady={setViewerMethods}
           screenHeightPercent={screenHeightPercent}
+          showMapControls={!showSplash}
         >
-          {/* Watermark rendered INSIDE the Cesium container when watermark is enabled and parcel exists */}
-          {watermarkConfig.visible && (activeParcel || isParcelLoaded) && (
+          {/* Watermark rendered INSIDE the Cesium container when watermark is enabled and only on base map screen */}
+          {!showSplash && watermarkConfig.visible && (activeParcel || isParcelLoaded) && (
             <WatermarkOverlay config={watermarkConfig} activeParcel={activeParcel} />
           )}
         </CesiumViewer>
@@ -596,30 +603,32 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Studio Control Panel */}
-      <ControlPanel
-        isOpen={isPanelOpen}
-        onToggleOpen={() => setIsPanelOpen((prev) => !prev)}
-        baseMap={baseMap}
-        onBaseMapChange={setBaseMap}
-        videoFormat={videoFormat}
-        onVideoFormatChange={setVideoFormat}
-        cameraState={cameraState}
-        onCameraChange={handleCameraChange}
-        activeParcel={activeParcel}
-        onParcelLoaded={handleParcelLoaded}
-        onUpdateParcel={handleUpdateParcel}
-        parcelStyle={parcelStyle}
-        onParcelStyleChange={handleParcelStyleChange}
-        watermarkConfig={watermarkConfig}
-        onWatermarkChange={handleWatermarkChange}
-        isTerrainActive={isTerrainActive}
-        onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
-        viewerMethods={viewerMethods}
-        screenHeightPercent={screenHeightPercent}
-        onScreenHeightPercentChange={handleScreenHeightChange}
-        onClearParcel={handleClearParcel}
-      />
+      {/* Floating Studio Control Panel - Sadece altlık harita ekranında gösterilir */}
+      {!showSplash && (
+        <ControlPanel
+          isOpen={isPanelOpen}
+          onToggleOpen={() => setIsPanelOpen((prev) => !prev)}
+          baseMap={baseMap}
+          onBaseMapChange={setBaseMap}
+          videoFormat={videoFormat}
+          onVideoFormatChange={setVideoFormat}
+          cameraState={cameraState}
+          onCameraChange={handleCameraChange}
+          activeParcel={activeParcel}
+          onParcelLoaded={handleParcelLoaded}
+          onUpdateParcel={handleUpdateParcel}
+          parcelStyle={parcelStyle}
+          onParcelStyleChange={handleParcelStyleChange}
+          watermarkConfig={watermarkConfig}
+          onWatermarkChange={handleWatermarkChange}
+          isTerrainActive={isTerrainActive}
+          onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
+          viewerMethods={viewerMethods}
+          screenHeightPercent={screenHeightPercent}
+          onScreenHeightPercentChange={handleScreenHeightChange}
+          onClearParcel={handleClearParcel}
+        />
+      )}
 
       {/* PWA Çevrimdışı Durum Rozeti */}
       <OfflineIndicator />
