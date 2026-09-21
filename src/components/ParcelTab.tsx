@@ -8,10 +8,12 @@ import {
   Home,
   Trash2,
   Crosshair,
+  Sparkles,
 } from 'lucide-react';
 import { ParcelInfo } from '../types';
 import { formatArea } from '../utils/geoUtils';
 import { PriceInput } from './PriceInput';
+import { DEFAULT_PARCEL } from '../data/demoParcels';
 
 interface ParcelTabProps {
   activeParcel: ParcelInfo | null;
@@ -90,6 +92,16 @@ export const ParcelTab: React.FC<ParcelTabProps> = ({
             <span className="font-medium">{uploadMsg.text}</span>
           </div>
         )}
+
+        {/* Örnek Parsel Yükleme Hızlı Butonu */}
+        <button
+          type="button"
+          onClick={() => onParcelLoaded(DEFAULT_PARCEL)}
+          className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sky-300 hover:text-sky-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span>Örnek Parseli Yükle (Bursa Nilüfer Özlüce)</span>
+        </button>
       </div>
 
       {/* 2. MANUEL PARSEL BİLGİLERİ (ELLE GİRİŞ & DÜZENLEME) */}

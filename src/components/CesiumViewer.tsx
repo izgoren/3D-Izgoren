@@ -459,15 +459,63 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     });
   }, []);
 
+  // Update Camera
+  const updateCameraView = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || typeof Cesium === 'undefined' || isFlyingRef.current) return;
+
+    let targetCenter = parcelCenterRef.current;
+    if (!targetCenter && activeParcelRef.current?.coordinates?.length) {
+      const coords = activeParcelRef.current.coordinates;
+      let sLng = 0;
+      let sLat = 0;
+      coords.forEach((c) => {
+        sLng += c.lng;
+        sLat += c.lat;
+      });
+      targetCenter = Cesium.Cartesian3.fromDegrees(sLng / coords.length, sLat / coords.length, 0);
+      parcelCenterRef.current = targetCenter;
+    }
+
+    if (!targetCenter) return;
+
+    try {
+      viewer.camera.lookAt(
+        targetCenter,
+        new Cesium.HeadingPitchRange(
+          Cesium.Math.toRadians(headingRef.current),
+          Cesium.Math.toRadians(pitchRef.current),
+          rangeRef.current
+        )
+      );
+      // Unlock camera transform unless continuous tour is actively orbiting
+      if (!isTouringRef.current) {
+        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      }
+    } catch (e) {
+      console.warn('Camera update warning:', e);
+    }
+  }, []);
+
   // Sync refs
   useEffect(() => {
     isTouringRef.current = cameraState.isTouring;
-    if (!cameraState.isTouring && viewerRef.current && typeof Cesium !== 'undefined') {
+    if (cameraState.isTouring) {
+      // If entering 3D tour from top-down (-90° / Kuşbakışı), smoothly tilt to a 3D perspective angle (-38°)
+      if (pitchRef.current < -65) {
+        pitchRef.current = -38;
+        onCameraChangeRef.current({ pitch: -38 });
+      }
+      updateCameraView();
+      if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+        viewerRef.current.scene.requestRender();
+      }
+    } else if (viewerRef.current && typeof Cesium !== 'undefined') {
       try {
         viewerRef.current.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
       } catch (e) {}
     }
-  }, [cameraState.isTouring]);
+  }, [cameraState.isTouring, updateCameraView]);
 
   useEffect(() => {
     tourSpeedRef.current = cameraState.tourSpeed;
@@ -545,29 +593,6 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, []);
 
-  // Update Camera
-  const updateCameraView = useCallback(() => {
-    const viewer = viewerRef.current;
-    if (!viewer || !parcelCenterRef.current || typeof Cesium === 'undefined' || isFlyingRef.current) return;
-
-    try {
-      viewer.camera.lookAt(
-        parcelCenterRef.current,
-        new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(headingRef.current),
-          Cesium.Math.toRadians(pitchRef.current),
-          rangeRef.current
-        )
-      );
-      // Unlock camera transform unless continuous tour is actively orbiting
-      if (!isTouringRef.current) {
-        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      }
-    } catch (e) {
-      console.warn('Camera update warning:', e);
-    }
-  }, []);
-
   // Center camera precisely on the loaded parcel and immediately pre-stream satellite tiles
   const centerOnParcel = useCallback(
     (duration: number = 0.8, targetParcelOverride?: ParcelInfo) => {
@@ -642,8 +667,8 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
         } catch (e) {}
 
-        // Varsayılan ayar: Kuşbakışı görüntü (-89.9° dik açı) ve KML ekrana tam ortalı
-        const targetPitchDeg = pitchRef.current <= -85 ? -89.9 : pitchRef.current;
+        // Varsayılan ayar: Kuşbakışı görüntü (-89.0° dik açı) ve KML ekrana tam ortalı
+        const targetPitchDeg = pitchRef.current <= -85 ? -89.0 : pitchRef.current;
         const targetPitchRad = Cesium.Math.toRadians(targetPitchDeg);
         const targetHeadingRad = Cesium.Math.toRadians(headingRef.current || 0);
 
@@ -727,8 +752,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         Cesium.Ion.defaultAccessToken = '';
 
         const viewer = new Cesium.Viewer(containerRef.current, {
-          sceneMode: Cesium.SceneMode.COLUMBUS_VIEW, // Düz Harita Görünümü (2.5D Columbus Projeksiyonu - Küre yerine düz zemin)
-          mapProjection: new Cesium.WebMercatorProjection(),
+          sceneMode: Cesium.SceneMode.SCENE3D, // Gerçek 3D Harita Küresi & 3D Sinematik Tur ve Yükseklik Desteği
           baseLayer: false, // Critical: Stops Cesium from trying to fetch Ion Bing Maps without a token
           baseLayerPicker: false,
           geocoder: false,
@@ -808,20 +832,45 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         // Setup clock tick listener for continuous cinematic 3D tour (Throttled React notification for max speed)
         let lastHeadingNotification = 0;
         const onTick = () => {
-          if (isTouringRef.current && parcelCenterRef.current) {
-            const nextHeading = (headingRef.current + tourSpeedRef.current) % 360;
-            headingRef.current = nextHeading;
-            updateCameraView();
+          if (isTouringRef.current) {
+            if (!parcelCenterRef.current && activeParcelRef.current?.coordinates?.length) {
+              const coords = activeParcelRef.current.coordinates;
+              let sLng = 0;
+              let sLat = 0;
+              coords.forEach((c) => {
+                sLng += c.lng;
+                sLat += c.lat;
+              });
+              parcelCenterRef.current = Cesium.Cartesian3.fromDegrees(sLng / coords.length, sLat / coords.length, 0);
+            }
 
-            // Throttle React state re-renders to 4Hz (250ms) to ensure 60fps buttery smooth rendering without UI lag
-            const now = performance.now();
-            if (now - lastHeadingNotification > 250) {
-              lastHeadingNotification = now;
-              onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
+            if (parcelCenterRef.current) {
+              const speed = tourSpeedRef.current || 0.3;
+              const nextHeading = (headingRef.current + speed) % 360;
+              headingRef.current = nextHeading;
+
+              // Ensure 3D tour orbits from perspective angle, not degenerate -90
+              if (pitchRef.current < -65) {
+                pitchRef.current = -38;
+              }
+
+              updateCameraView();
+
+              if (viewer && !viewer.isDestroyed()) {
+                viewer.scene.requestRender();
+              }
+
+              // Throttle React state re-renders to 4Hz (250ms) to ensure 60fps buttery smooth rendering without UI lag
+              const now = performance.now();
+              if (now - lastHeadingNotification > 250) {
+                lastHeadingNotification = now;
+                onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
+              }
             }
           }
         };
 
+        viewer.clock.shouldAnimate = true;
         viewer.clock.onTick.addEventListener(onTick);
 
         viewerRef.current = viewer;
@@ -973,73 +1022,123 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         Cesium.Cartesian3.fromDegrees(c.lng, c.lat, c.alt || 0)
       );
 
+      // Ensure points form a closed ring for polylines and polygons
+      const closedPoints = [...cartesianPoints];
+      if (coords.length >= 3) {
+        const first = coords[0];
+        const last = coords[coords.length - 1];
+        if (Math.abs(first.lng - last.lng) > 1e-6 || Math.abs(first.lat - last.lat) > 1e-6) {
+          closedPoints.push(cartesianPoints[0]);
+        }
+      }
+
       // Parse colors
       const borderCesiumColor = Cesium.Color.fromCssColorString(parcelStyle.borderColor || '#38bdf8');
       const fillCesiumColor = Cesium.Color.fromCssColorString(parcelStyle.fillColor || '#38bdf8').withAlpha(
-        parcelStyle.fillOpacity
+        Math.max(0, Math.min(1, parcelStyle.fillOpacity ?? 0.3))
       );
 
-      // Outline material: dashed, solid, or animated glow
+      const isExtruded = (parcelStyle.extrusionHeight || 0) > 0;
+      const createdEntities: any[] = [];
+
+      // 1. Base 3D Polygon
+      const polygonConfig: any = {
+        hierarchy: new Cesium.PolygonHierarchy(closedPoints),
+        material: fillCesiumColor,
+      };
+
+      if (isExtruded) {
+        polygonConfig.height = 0;
+        polygonConfig.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+        polygonConfig.extrudedHeight = parcelStyle.extrusionHeight;
+        polygonConfig.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+        polygonConfig.outline = true;
+        polygonConfig.outlineColor = borderCesiumColor;
+        polygonConfig.outlineWidth = Math.max(1, parcelStyle.borderWidth || 3);
+      } else {
+        polygonConfig.heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+      }
+
+      const mainPolygonEntity = viewer.entities.add({
+        name: activeParcel.name || 'Parsel Alanı',
+        polygon: polygonConfig,
+      });
+      createdEntities.push(mainPolygonEntity);
+
+      // 2. Base Polyline (Outline / Border)
       let polylineMaterial: any = borderCesiumColor;
+      let shouldClampPolyline = !isExtruded;
+
       if (parcelStyle.dashedBorder) {
         polylineMaterial = new Cesium.PolylineDashMaterialProperty({
           color: borderCesiumColor,
-          gapColor: Cesium.Color.YELLOW.withAlpha(0.8),
+          gapColor: Cesium.Color.BLACK.withAlpha(0.2),
           dashLength: 20.0,
         });
+        // Cesium GroundPolyline does not support PolylineDashMaterialProperty, so clampToGround must be false
+        shouldClampPolyline = false;
       } else if (parcelStyle.glowEffect) {
         polylineMaterial = new Cesium.PolylineGlowMaterialProperty({
-          glowPower: 0.25,
+          glowPower: 0.3,
           color: borderCesiumColor,
         });
       }
 
-      const createdEntities: any[] = [];
-
-      // 1. Base 3D Polygon & Polyline
-      const mainEntity = viewer.entities.add({
-        name: activeParcel.name || 'Parsel',
+      const mainPolylineEntity = viewer.entities.add({
+        name: `${activeParcel.name || 'Parsel'} - Sınır`,
         polyline: {
-          positions: cartesianPoints,
-          width: parcelStyle.borderWidth,
+          positions: closedPoints,
+          width: Math.max(1, parcelStyle.borderWidth || 4),
           material: polylineMaterial,
-          clampToGround: parcelStyle.extrusionHeight === 0,
-        },
-        polygon: {
-          hierarchy: new Cesium.PolygonHierarchy(cartesianPoints),
-          material: fillCesiumColor,
-          heightReference:
-            parcelStyle.extrusionHeight > 0
-              ? Cesium.HeightReference.RELATIVE_TO_GROUND
-              : Cesium.HeightReference.CLAMP_TO_GROUND,
-          extrudedHeight: parcelStyle.extrusionHeight > 0 ? parcelStyle.extrusionHeight : undefined,
-          outline: true,
-          outlineColor: borderCesiumColor,
-          outlineWidth: parcelStyle.borderWidth,
+          clampToGround: shouldClampPolyline,
         },
       });
-      createdEntities.push(mainEntity);
+      createdEntities.push(mainPolylineEntity);
 
-      // 2. Canlı Vurgu ve Sınır Çizgisi (GPU Donanım Hızlandırmalı, 0 CPU yükü, 60+ FPS)
-      if (parcelStyle.animateLine || parcelStyle.glowEffect) {
-        const glowOutline = viewer.entities.add({
-          name: `${activeParcel.name || 'Parsel'} - Canlı Vurgu`,
+      // 3. Su Akışı Animasyonu (Canlı Dalga - Kesintisiz, pürüzsüz ve parlak akan nehir/su dalgası efekti)
+      if (parcelStyle.animateLine) {
+        const waterWaveEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Canlı Su Dalgası`,
           polyline: {
-            positions: cartesianPoints,
-            width: parcelStyle.borderWidth + 4,
+            positions: closedPoints,
+            width: new Cesium.CallbackProperty(() => {
+              return (parcelStyle.borderWidth || 4) + 4 + 2 * Math.sin(Date.now() / 320);
+            }, false),
             material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.35,
-              taperPower: 0.85,
-              color: Cesium.Color.fromCssColorString(parcelStyle.borderColor || '#38bdf8'),
+              glowPower: new Cesium.CallbackProperty(() => {
+                return 0.35 + 0.15 * Math.sin(Date.now() / 280);
+              }, false),
+              taperPower: 0.75,
+              color: borderCesiumColor,
             }),
-            clampToGround: parcelStyle.extrusionHeight === 0,
+            clampToGround: !isExtruded,
           },
         });
-        createdEntities.push(glowOutline);
+        createdEntities.push(waterWaveEntity);
+      }
+
+      // 4. Köşe Noktaları (Köşe Başlangıç / Bitiş Noktaları)
+      if (parcelStyle.showStartEndMarkers && coords.length > 0) {
+        coords.forEach((coord, idx) => {
+          const ptEntity = viewer.entities.add({
+            name: `Köşe Noktası ${idx + 1}`,
+            position: Cesium.Cartesian3.fromDegrees(coord.lng, coord.lat, (coord.alt || 0) + 1),
+            point: {
+              pixelSize: 8,
+              color: borderCesiumColor,
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 2,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            },
+          });
+          createdEntities.push(ptEntity);
+        });
       }
 
       parcelEntitiesRef.current = createdEntities;
       lastRenderedCoordsKeyRef.current = parcelGeometryKey;
+
+      viewer.scene.requestRender();
 
       // SADECE ve SADECE YENİ BİR PARSEL YÜKLENDİĞİNDE KAMERAYI ODAKLA
       // İl, ilçe, ada, parsel, fiyat gibi parsel ekranındaki metin değişikliklerinde kamerayı asla oynatma ve altlık haritayı yenileme!

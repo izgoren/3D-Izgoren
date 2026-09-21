@@ -66,14 +66,14 @@ export default function App() {
   // Parcel Styling
   const [parcelStyle, setParcelStyle] = useState<ParcelStyle>({
     borderColor: '#38bdf8',
-    borderWidth: 5,
+    borderWidth: 4,
     fillColor: '#38bdf8',
-    fillOpacity: 0.3,
+    fillOpacity: 0.25,
     extrusionHeight: 0,
-    dashedBorder: true,
+    dashedBorder: false,
     glowEffect: true,
     showStartEndMarkers: false,
-    animateLine: true,
+    animateLine: false,
   });
 
   // Watermark Banner Config (Defaults restored from localStorage if previously saved)
@@ -456,7 +456,14 @@ export default function App() {
 
               {/* 3D Tur Hızlı Buton */}
               <button
-                onClick={() => handleCameraChange({ isTouring: !cameraState.isTouring })}
+                onClick={() => {
+                  const nextTouring = !cameraState.isTouring;
+                  if (nextTouring && cameraState.pitch < -65) {
+                    handleCameraChange({ isTouring: true, pitch: -38 });
+                  } else {
+                    handleCameraChange({ isTouring: nextTouring });
+                  }
+                }}
                 className={`min-h-[32px] sm:min-h-[34px] px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition cursor-pointer shrink-0 ${
                   cameraState.isTouring
                     ? 'bg-red-500 text-white border-red-400 animate-pulse'

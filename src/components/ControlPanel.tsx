@@ -299,6 +299,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const areaDetails = activeParcel ? formatArea(activeParcel.areaM2) : null;
 
+  const handleToggleTour = () => {
+    const nextTouring = !cameraState.isTouring;
+    if (nextTouring && cameraState.pitch < -65) {
+      onCameraChange({ isTouring: true, pitch: -38 });
+    } else {
+      onCameraChange({ isTouring: nextTouring });
+    }
+  };
+
   return (
     <>
       {/* Mobile Floating Action Dock (Visible only on mobile when panel is collapsed) */}
@@ -324,7 +333,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             </button>
 
             <button
-              onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
+              onClick={handleToggleTour}
               className={`w-10 h-10 rounded-xl border flex items-center justify-center transition active:scale-95 cursor-pointer ${
                 cameraState.isTouring
                   ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-lg shadow-red-500/30'
@@ -503,7 +512,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <div className="space-y-4">
                 {/* 3D Cinematic Tour Main Button */}
                 <button
-                  onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
+                  onClick={handleToggleTour}
                   className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg cursor-pointer active:scale-98 ${
                     cameraState.isTouring
                       ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-500/30'
@@ -917,9 +926,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <div className="space-y-4">
                 {/* Sınır Rengi */}
                 <div>
-                  <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mb-2 block">
-                    Sınır Çizgisi Rengi
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider block">
+                      Sınır Çizgisi ve Dolgu Rengi
+                    </label>
+                    <div className="flex items-center gap-1.5 bg-white/10 px-2 py-0.5 rounded-lg border border-white/15">
+                      <input
+                        type="color"
+                        value={parcelStyle.borderColor || '#38bdf8'}
+                        onChange={(e) =>
+                          onParcelStyleChange({ borderColor: e.target.value, fillColor: e.target.value })
+                        }
+                        className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent"
+                        title="Özel Renk Seç"
+                      />
+                      <span className="text-[10px] font-mono text-slate-300 uppercase">
+                        {parcelStyle.borderColor || '#38bdf8'}
+                      </span>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-6 gap-2">
                     {colorPresets.map((c) => (
                       <button
@@ -928,7 +953,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                           onParcelStyleChange({ borderColor: c.hex, fillColor: c.hex })
                         }
                         style={{ backgroundColor: c.hex }}
-                        className={`h-8 rounded-lg border-2 transition ${
+                        className={`h-8 rounded-lg border-2 transition cursor-pointer ${
                           parcelStyle.borderColor === c.hex ? 'border-white scale-110 shadow-lg' : 'border-black/30'
                         }`}
                         title={c.name}
@@ -1001,9 +1026,26 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </div>
                 </div>
 
+                {/* Parlayan Neon Sınır (Glow) Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Parlama Efekti (Neon Glow)</span>
+                    <span className="text-[10px] text-slate-400">Sınır çizgisine parlak neon ışıma ekler</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={parcelStyle.glowEffect}
+                    onChange={(e) => onParcelStyleChange({ glowEffect: e.target.checked })}
+                    className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
+                  />
+                </div>
+
                 {/* Kesikli Çizgi Animasyonu Toggle */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
-                  <span className="text-slate-200 font-medium">Kesikli Çizgi Stili</span>
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Kesikli Çizgi Stili</span>
+                    <span className="text-[10px] text-slate-400">Düz çizgi yerine kesikli sınır çizgisi</span>
+                  </div>
                   <input
                     type="checkbox"
                     checked={parcelStyle.dashedBorder}
@@ -1027,6 +1069,20 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     checked={parcelStyle.animateLine}
                     onChange={(e) => onParcelStyleChange({ animateLine: e.target.checked })}
                     className="w-4 h-4 accent-sky-400 cursor-pointer rounded shrink-0 ml-2"
+                  />
+                </div>
+
+                {/* Köşe Koordinat Noktaları Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Köşe Koordinat Noktaları</span>
+                    <span className="text-[10px] text-slate-400">Parselin tüm köşe noktalarını haritada işaretle</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={parcelStyle.showStartEndMarkers}
+                    onChange={(e) => onParcelStyleChange({ showStartEndMarkers: e.target.checked })}
+                    className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
                   />
                 </div>
               </div>
@@ -1457,7 +1513,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             <button
               type="button"
-              onClick={() => onCameraChange({ isTouring: !cameraState.isTouring })}
+              onClick={handleToggleTour}
               className={`flex-1 h-9 px-2.5 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer ${
                 cameraState.isTouring
                   ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-md shadow-red-500/30'
