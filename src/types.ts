@@ -42,7 +42,9 @@ export interface ParcelStyle {
   dashedBorder: boolean;
   glowEffect: boolean;
   showStartEndMarkers: boolean;
-  animateLine: boolean;
+  motionTracking: boolean; // 3D Motion Tracking & HUD Callout
+  motionTrackingMode?: 'cinematic_callout' | 'target_crosshair' | 'corner_pins';
+  motionTrackingHeight?: number; // Leader line height in meters (e.g. 15m - 80m)
 }
 
 export interface WatermarkConfig {

@@ -234,7 +234,7 @@ export const AppUpdateChecker: React.FC = () => {
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-cyan-400 font-bold shrink-0">✓</span>
-                    <span><strong className="text-white">Gelişmiş Su Akışı Animasyonu:</strong> Sınır hattı boyunca kesintisiz akan su dalgaları, ışık süzmesi ve kamera dururken dahi çalışan 60 FPS canlı nehir efekti.</span>
+                    <span><strong className="text-white">3D Motion Tracking (Kamera & Parsel Takip):</strong> Drone gayrimenkul videoları için parsel merkezine kilitlenen 3D sinematik callout HUD kutusu, dikey radar lider çizgisi ve 3D takip nişangahı.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-indigo-400 font-bold shrink-0">✓</span>

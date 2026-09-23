@@ -1180,22 +1180,111 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   />
                 </div>
 
-                {/* Su Akışı Animasyonu */}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-sky-500/10 to-teal-500/10 border border-sky-500/30">
-                  <div className="flex flex-col">
-                    <span className="text-white font-medium flex items-center gap-1.5 text-xs">
-                      <span>🌊 Su Akışı Animasyonu (Canlı Dalga)</span>
-                    </span>
-                    <span className="text-[10px] text-slate-300">
-                      Sınır hattı boyunca su gibi kesintisiz, pürüzsüz ve parlak akan nehir/su dalgası efekti
-                    </span>
+                {/* 3D Motion Tracking (Kamera & Parsel Takip) */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-500/15 via-indigo-500/15 to-purple-500/15 border border-sky-400/40 shadow-lg shadow-sky-500/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0">
+                        <Crosshair className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-white font-bold flex items-center gap-1.5 text-xs">
+                          <span>3D Motion Tracking</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-400/20 text-sky-300 border border-sky-400/30">
+                            HUD
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-slate-300">
+                          Drone videoları için 3D kamera takip callout'u ve radar lider çizgisi
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={parcelStyle.motionTracking}
+                      onChange={(e) => onParcelStyleChange({ motionTracking: e.target.checked })}
+                      className="w-4 h-4 accent-sky-400 cursor-pointer rounded shrink-0 ml-2"
+                    />
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={parcelStyle.animateLine}
-                    onChange={(e) => onParcelStyleChange({ animateLine: e.target.checked })}
-                    className="w-4 h-4 accent-sky-400 cursor-pointer rounded shrink-0 ml-2"
-                  />
+
+                  {parcelStyle.motionTracking && (
+                    <div className="space-y-3 pt-2 border-t border-white/10 animate-in fade-in duration-200">
+                      {/* Takip Modu Seçimi */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-medium text-slate-300 flex items-center justify-between">
+                          <span>Takip Modu:</span>
+                          <span className="text-[10px] font-mono text-sky-400">
+                            {parcelStyle.motionTrackingMode === 'corner_pins'
+                              ? 'Köşe Parantezleri'
+                              : parcelStyle.motionTrackingMode === 'target_crosshair'
+                              ? '3D Nişangah'
+                              : 'Sinematik Callout'}
+                          </span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onParcelStyleChange({ motionTrackingMode: 'cinematic_callout' })}
+                            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex flex-col items-center gap-1 ${
+                              (parcelStyle.motionTrackingMode || 'cinematic_callout') === 'cinematic_callout'
+                                ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
+                                : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <span>🎬 Callout</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onParcelStyleChange({ motionTrackingMode: 'target_crosshair' })}
+                            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex flex-col items-center gap-1 ${
+                              parcelStyle.motionTrackingMode === 'target_crosshair'
+                                ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
+                                : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <span>🎯 Nişangah</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onParcelStyleChange({ motionTrackingMode: 'corner_pins' })}
+                            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex flex-col items-center gap-1 ${
+                              parcelStyle.motionTrackingMode === 'corner_pins'
+                                ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
+                                : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <span>📐 Köşeler [⌖]</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Lider Çizgisi İrtifa Yüksekliği */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-300 text-[11px]">3D İrtifa Yüksekliği:</span>
+                          <span className="text-sky-400 font-mono font-bold text-[11px]">
+                            {parcelStyle.motionTrackingHeight || 35} m
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={15}
+                          max={80}
+                          step={5}
+                          value={parcelStyle.motionTrackingHeight || 35}
+                          onChange={(e) =>
+                            onParcelStyleChange({ motionTrackingHeight: Number(e.target.value) })
+                          }
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-500">
+                          <span>15m (Alçak)</span>
+                          <span>35m (Standart)</span>
+                          <span>80m (Yüksek İrtifa)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Köşe Koordinat Noktaları Toggle */}

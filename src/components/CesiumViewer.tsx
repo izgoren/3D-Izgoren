@@ -400,12 +400,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const onCameraChangeRef = useRef(onCameraChange);
   const baseMapRef = useRef<BaseMapType>(baseMap);
   const isTerrainActiveRef = useRef<boolean>(isTerrainActive);
-  const isAnimateLineRef = useRef<boolean>(!!parcelStyle.animateLine);
+  const isMotionTrackingRef = useRef<boolean>(!!parcelStyle.motionTracking);
   const lastRenderedCoordsKeyRef = useRef<string>('');
 
   useEffect(() => {
-    isAnimateLineRef.current = !!parcelStyle.animateLine;
-  }, [parcelStyle.animateLine]);
+    isMotionTrackingRef.current = !!parcelStyle.motionTracking;
+  }, [parcelStyle.motionTracking]);
 
   useEffect(() => {
     activeParcelRef.current = activeParcel;
@@ -944,8 +944,8 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
               }
             }
-          } else if (isAnimateLineRef.current) {
-            // Su akışı animasyonu açıkken kamera turu duruyor olsa bile 60 FPS pürüzsüz akış için render iste
+          } else if (isMotionTrackingRef.current) {
+            // Motion Tracking açıkken 3D radar/halka nabız animasyonları için render iste
             if (viewer && !viewer.isDestroyed()) {
               viewer.scene.requestRender();
             }
@@ -1177,101 +1177,158 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       });
       createdEntities.push(mainPolylineEntity);
 
-      // 3. Su Akışı Animasyonu (Dinamik Canlı Akış - Sınır hattı boyunca kesintisiz akan su damlacıkları, ışık süzmesi ve dalga kanalı)
-      if (parcelStyle.animateLine && closedPoints.length >= 2) {
-        // Parsel çevre uzunluğu ve her köşe arasındaki kümülatif mesafe hesaplaması
-        const distances: number[] = [0];
-        let totalPerimeter = 0;
-        for (let i = 0; i < closedPoints.length - 1; i++) {
-          const d = Cesium.Cartesian3.distance(closedPoints[i], closedPoints[i + 1]);
-          totalPerimeter += d;
-          distances.push(totalPerimeter);
-        }
-        if (totalPerimeter <= 0) totalPerimeter = 1;
+      // 3. 3D Motion Tracking (Kamera & Parsel Takip Grafiği, 3D HUD Callout & Lider Çizgisi)
+      if (parcelStyle.motionTracking && coords.length > 0) {
+        let sLng = 0;
+        let sLat = 0;
+        let minAlt = coords[0].alt || 0;
+        coords.forEach((c) => {
+          sLng += c.lng;
+          sLat += c.lat;
+          if ((c.alt || 0) < minAlt) minAlt = c.alt || 0;
+        });
+        const cLng = sLng / coords.length;
+        const cLat = sLat / coords.length;
+        const baseGroundAlt = isExtruded ? (parcelStyle.extrusionHeight || 0) : minAlt;
+        const leaderHeight = parcelStyle.motionTrackingHeight || 35;
+        const floatingAlt = baseGroundAlt + leaderHeight;
 
-        // Çevre hattı üzerinde herhangi bir mesafedeki Cartesian3 koordinatını pürüzsüz interpolasyon ile hesapla
-        const getPointAtPerimeterDist = (targetDist: number) => {
-          const d = ((targetDist % totalPerimeter) + totalPerimeter) % totalPerimeter;
-          let segIdx = 0;
-          for (let i = 0; i < distances.length - 1; i++) {
-            if (d <= distances[i + 1]) {
-              segIdx = i;
-              break;
-            }
-          }
-          const d0 = distances[segIdx];
-          const d1 = distances[segIdx + 1];
-          const segLen = d1 - d0;
-          const t = segLen > 1e-6 ? (d - d0) / segLen : 0;
-          return Cesium.Cartesian3.lerp(closedPoints[segIdx], closedPoints[segIdx + 1], t, new Cesium.Cartesian3());
-        };
+        const groundPos = Cesium.Cartesian3.fromDegrees(cLng, cLat, baseGroundAlt);
+        const floatPos = Cesium.Cartesian3.fromDegrees(cLng, cLat, floatingAlt);
 
-        // A) Sınır hattı boyunca parlayan canlı su kanalı (Nabız & Işıma Dalgası)
-        const waterChannelEntity = viewer.entities.add({
-          name: `${activeParcel.name || 'Parsel'} - Canlı Su Kanalı`,
-          polyline: {
-            positions: closedPoints,
-            width: new Cesium.CallbackProperty(() => {
-              return (parcelStyle.borderWidth || 4) + 3 + 1.5 * Math.sin(Date.now() / 240);
-            }, false),
-            material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: new Cesium.CallbackProperty(() => {
-                return 0.45 + 0.2 * Math.sin(Date.now() / 220);
-              }, false),
-              taperPower: 0.6,
-              color: borderCesiumColor,
-            }),
-            clampToGround: !isExtruded,
+        // A) Zemin Takip Hedefi & Radar Halkası (Ground Tracking Target)
+        const groundAnchorEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Motion Tracking Zemin Hedefi`,
+          position: groundPos,
+          point: {
+            pixelSize: 10,
+            color: borderCesiumColor,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2,
+            heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         });
-        createdEntities.push(waterChannelEntity);
+        createdEntities.push(groundAnchorEntity);
 
-        // B) Sınır hattı boyunca kesintisiz akan canlı su damlaları / ışık akışı parçacıkları
-        // Çevre uzunluğuna göre optimize sayıda (8-16 adet) hareketli su damlası
-        const dropletCount = Math.min(16, Math.max(8, Math.floor(totalPerimeter / 50)));
-        for (let i = 0; i < dropletCount; i++) {
-          const phaseOffset = i / dropletCount;
-
-          // 1) Parlak beyaz/su mavisi damlacık çekirdeği
-          const dropletEntity = viewer.entities.add({
-            name: `${activeParcel.name || 'Parsel'} - Su Damlası ${i + 1}`,
-            position: new Cesium.CallbackProperty(() => {
-              // 1 tam tur yaklaşık 4.8 saniye (doğal su akış hızı)
-              const progress = ((Date.now() * 0.00021) + phaseOffset) % 1.0;
-              return getPointAtPerimeterDist(progress * totalPerimeter);
+        // Zemin etrafında genişleyen dinamik radar takip halkası
+        const groundRingEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Zemin Radar Halkası`,
+          position: groundPos,
+          point: {
+            pixelSize: new Cesium.CallbackProperty(() => {
+              return 24 + 10 * Math.sin(Date.now() / 250);
             }, false),
-            point: {
-              pixelSize: new Cesium.CallbackProperty(() => {
-                return 7 + 2 * Math.sin(Date.now() / 180 + i);
-              }, false),
-              color: Cesium.Color.WHITE,
-              outlineColor: borderCesiumColor,
-              outlineWidth: 2.5,
-              heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-          });
-          createdEntities.push(dropletEntity);
+            color: borderCesiumColor.withAlpha(0.25),
+            outlineColor: borderCesiumColor.withAlpha(0.8),
+            outlineWidth: 1.5,
+            heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+        createdEntities.push(groundRingEntity);
 
-          // 2) Su damlasının dış ışıma aurası (Yumuşak neon su halesi)
-          const haloEntity = viewer.entities.add({
-            name: `${activeParcel.name || 'Parsel'} - Su Aurası ${i + 1}`,
-            position: new Cesium.CallbackProperty(() => {
-              const progress = ((Date.now() * 0.00021) + phaseOffset) % 1.0;
-              return getPointAtPerimeterDist(progress * totalPerimeter);
+        // B) Dikey 3D Lider Çizgisi (Vertical Tracking Leader Line)
+        const leaderLineEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Takip Lider Çizgisi`,
+          polyline: {
+            positions: [groundPos, floatPos],
+            width: 2.5,
+            material: new Cesium.PolylineDashMaterialProperty({
+              color: borderCesiumColor,
+              gapColor: Cesium.Color.TRANSPARENT,
+              dashLength: 12,
+            }),
+          },
+        });
+        createdEntities.push(leaderLineEntity);
+
+        // C) 3D Havada Asılı Motion Tracked Hedef Noktası (Floating 3D Reticle)
+        const floatReticleEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - 3D Tracking Reticle`,
+          position: floatPos,
+          point: {
+            pixelSize: 12,
+            color: Cesium.Color.WHITE,
+            outlineColor: borderCesiumColor,
+            outlineWidth: 3,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+        createdEntities.push(floatReticleEntity);
+
+        // D) Dönen / Nabız Yapan Dış Takip Nişangahı (Pulsing Crosshair Aura)
+        const floatAuraEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Tracking Crosshair Aura`,
+          position: floatPos,
+          point: {
+            pixelSize: new Cesium.CallbackProperty(() => {
+              return 26 + 6 * Math.sin(Date.now() / 200);
             }, false),
-            point: {
-              pixelSize: new Cesium.CallbackProperty(() => {
-                return 16 + 4 * Math.sin(Date.now() / 200 + i);
-              }, false),
-              color: borderCesiumColor.withAlpha(0.4),
-              outlineColor: Cesium.Color.TRANSPARENT,
-              outlineWidth: 0,
-              heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
+            color: borderCesiumColor.withAlpha(0.2),
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 1.5,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+        createdEntities.push(floatAuraEntity);
+
+        // E) Sinematik 3D HUD Callout Bilgi Kartı (3D Billboard / Label)
+        // Parsel adı, alan, koordinatlar ve canlı tracking kilit durumu
+        const parcelTitle = (activeParcel.name || 'PARSEL').toUpperCase();
+        const areaStr = activeParcel.areaM2 ? `${activeParcel.areaM2.toLocaleString('tr-TR')} m²` : '';
+        const coordsStr = `${cLat.toFixed(5)}°N, ${cLng.toFixed(5)}°E`;
+        const calloutText = `[ ⌖ MOTION TRACKING ]\n${parcelTitle}${areaStr ? ` • ${areaStr}` : ''}\n📍 ${coordsStr} | 🔺 +${leaderHeight}m`;
+
+        const hudCalloutEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - 3D HUD Callout`,
+          position: floatPos,
+          label: {
+            text: calloutText,
+            font: 'bold 11px "JetBrains Mono", Consolas, monospace',
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.fromCssColorString('#020617'),
+            outlineWidth: 3,
+            backgroundColor: Cesium.Color.fromCssColorString('#0f172a').withAlpha(0.88),
+            showBackground: true,
+            backgroundPadding: new Cesium.Cartesian2(10, 6),
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -18),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scale: 1.0,
+          },
+        });
+        createdEntities.push(hudCalloutEntity);
+
+        // F) Köşe Takip Braketleri (Eğer 'corner_pins' modu seçildiyse)
+        if (parcelStyle.motionTrackingMode === 'corner_pins') {
+          coords.forEach((coord, idx) => {
+            const cornerPos = Cesium.Cartesian3.fromDegrees(coord.lng, coord.lat, (coord.alt || 0) + 1);
+            const cornerEntity = viewer.entities.add({
+              name: `Köşe Takip Noktası ${idx + 1}`,
+              position: cornerPos,
+              point: {
+                pixelSize: 8,
+                color: Cesium.Color.CYAN,
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 2,
+                heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+              label: {
+                text: `⌖ P${idx + 1}`,
+                font: 'bold 10px monospace',
+                fillColor: Cesium.Color.CYAN,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 2,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                pixelOffset: new Cesium.Cartesian2(0, -12),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+            });
+            createdEntities.push(cornerEntity);
           });
-          createdEntities.push(haloEntity);
         }
       }
 
