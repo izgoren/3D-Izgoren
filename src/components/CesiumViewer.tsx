@@ -400,7 +400,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const onCameraChangeRef = useRef(onCameraChange);
   const baseMapRef = useRef<BaseMapType>(baseMap);
   const isTerrainActiveRef = useRef<boolean>(isTerrainActive);
+  const isAnimateLineRef = useRef<boolean>(!!parcelStyle.animateLine);
   const lastRenderedCoordsKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    isAnimateLineRef.current = !!parcelStyle.animateLine;
+  }, [parcelStyle.animateLine]);
 
   useEffect(() => {
     activeParcelRef.current = activeParcel;
@@ -939,6 +944,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
               }
             }
+          } else if (isAnimateLineRef.current) {
+            // Su akışı animasyonu açıkken kamera turu duruyor olsa bile 60 FPS pürüzsüz akış için render iste
+            if (viewer && !viewer.isDestroyed()) {
+              viewer.scene.requestRender();
+            }
           }
         };
 
@@ -1167,26 +1177,102 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       });
       createdEntities.push(mainPolylineEntity);
 
-      // 3. Su Akışı Animasyonu (Canlı Dalga - Kesintisiz, pürüzsüz ve parlak akan nehir/su dalgası efekti)
-      if (parcelStyle.animateLine) {
-        const waterWaveEntity = viewer.entities.add({
-          name: `${activeParcel.name || 'Parsel'} - Canlı Su Dalgası`,
+      // 3. Su Akışı Animasyonu (Dinamik Canlı Akış - Sınır hattı boyunca kesintisiz akan su damlacıkları, ışık süzmesi ve dalga kanalı)
+      if (parcelStyle.animateLine && closedPoints.length >= 2) {
+        // Parsel çevre uzunluğu ve her köşe arasındaki kümülatif mesafe hesaplaması
+        const distances: number[] = [0];
+        let totalPerimeter = 0;
+        for (let i = 0; i < closedPoints.length - 1; i++) {
+          const d = Cesium.Cartesian3.distance(closedPoints[i], closedPoints[i + 1]);
+          totalPerimeter += d;
+          distances.push(totalPerimeter);
+        }
+        if (totalPerimeter <= 0) totalPerimeter = 1;
+
+        // Çevre hattı üzerinde herhangi bir mesafedeki Cartesian3 koordinatını pürüzsüz interpolasyon ile hesapla
+        const getPointAtPerimeterDist = (targetDist: number) => {
+          const d = ((targetDist % totalPerimeter) + totalPerimeter) % totalPerimeter;
+          let segIdx = 0;
+          for (let i = 0; i < distances.length - 1; i++) {
+            if (d <= distances[i + 1]) {
+              segIdx = i;
+              break;
+            }
+          }
+          const d0 = distances[segIdx];
+          const d1 = distances[segIdx + 1];
+          const segLen = d1 - d0;
+          const t = segLen > 1e-6 ? (d - d0) / segLen : 0;
+          return Cesium.Cartesian3.lerp(closedPoints[segIdx], closedPoints[segIdx + 1], t, new Cesium.Cartesian3());
+        };
+
+        // A) Sınır hattı boyunca parlayan canlı su kanalı (Nabız & Işıma Dalgası)
+        const waterChannelEntity = viewer.entities.add({
+          name: `${activeParcel.name || 'Parsel'} - Canlı Su Kanalı`,
           polyline: {
             positions: closedPoints,
             width: new Cesium.CallbackProperty(() => {
-              return (parcelStyle.borderWidth || 4) + 4 + 2 * Math.sin(Date.now() / 320);
+              return (parcelStyle.borderWidth || 4) + 3 + 1.5 * Math.sin(Date.now() / 240);
             }, false),
             material: new Cesium.PolylineGlowMaterialProperty({
               glowPower: new Cesium.CallbackProperty(() => {
-                return 0.35 + 0.15 * Math.sin(Date.now() / 280);
+                return 0.45 + 0.2 * Math.sin(Date.now() / 220);
               }, false),
-              taperPower: 0.75,
+              taperPower: 0.6,
               color: borderCesiumColor,
             }),
             clampToGround: !isExtruded,
           },
         });
-        createdEntities.push(waterWaveEntity);
+        createdEntities.push(waterChannelEntity);
+
+        // B) Sınır hattı boyunca kesintisiz akan canlı su damlaları / ışık akışı parçacıkları
+        // Çevre uzunluğuna göre optimize sayıda (8-16 adet) hareketli su damlası
+        const dropletCount = Math.min(16, Math.max(8, Math.floor(totalPerimeter / 50)));
+        for (let i = 0; i < dropletCount; i++) {
+          const phaseOffset = i / dropletCount;
+
+          // 1) Parlak beyaz/su mavisi damlacık çekirdeği
+          const dropletEntity = viewer.entities.add({
+            name: `${activeParcel.name || 'Parsel'} - Su Damlası ${i + 1}`,
+            position: new Cesium.CallbackProperty(() => {
+              // 1 tam tur yaklaşık 4.8 saniye (doğal su akış hızı)
+              const progress = ((Date.now() * 0.00021) + phaseOffset) % 1.0;
+              return getPointAtPerimeterDist(progress * totalPerimeter);
+            }, false),
+            point: {
+              pixelSize: new Cesium.CallbackProperty(() => {
+                return 7 + 2 * Math.sin(Date.now() / 180 + i);
+              }, false),
+              color: Cesium.Color.WHITE,
+              outlineColor: borderCesiumColor,
+              outlineWidth: 2.5,
+              heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          });
+          createdEntities.push(dropletEntity);
+
+          // 2) Su damlasının dış ışıma aurası (Yumuşak neon su halesi)
+          const haloEntity = viewer.entities.add({
+            name: `${activeParcel.name || 'Parsel'} - Su Aurası ${i + 1}`,
+            position: new Cesium.CallbackProperty(() => {
+              const progress = ((Date.now() * 0.00021) + phaseOffset) % 1.0;
+              return getPointAtPerimeterDist(progress * totalPerimeter);
+            }, false),
+            point: {
+              pixelSize: new Cesium.CallbackProperty(() => {
+                return 16 + 4 * Math.sin(Date.now() / 200 + i);
+              }, false),
+              color: borderCesiumColor.withAlpha(0.4),
+              outlineColor: Cesium.Color.TRANSPARENT,
+              outlineWidth: 0,
+              heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          });
+          createdEntities.push(haloEntity);
+        }
       }
 
       // 4. Köşe Noktaları (Köşe Başlangıç / Bitiş Noktaları)
