@@ -7,7 +7,11 @@ import {
   VideoFormatType,
   WatermarkConfig,
 } from '../types';
-import { Mountain, Eye, EyeOff, LocateFixed, MapPin } from 'lucide-react';
+import { Mountain, Eye, EyeOff, LocateFixed, MapPin, Crosshair, Sparkles } from 'lucide-react';
+import {
+  getDeviceOptimizationProfile,
+  DeviceOptimizationProfile,
+} from '../utils/deviceOptimizer';
 
 declare const Cesium: any;
 
@@ -32,8 +36,10 @@ export interface ViewerMethods {
   startVideoRecording: () => Promise<boolean>;
   stopVideoRecording: () => void;
   isRecording: boolean;
-  flyToParcel: () => void;
+  flyToParcel: (targetPitch?: number, targetHeading?: number) => void;
   flyToDeviceLocation: () => void;
+  set2DView: () => void;
+  set3DView: () => void;
 }
 
 // 2D Canvas Watermark Renderer for Video & Snapshot (Proportionally scaled to recording dimensions)
@@ -416,6 +422,26 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     isTerrainActiveRef.current = isTerrainActive;
   }, [isTerrainActive]);
 
+  // Cihaz Hız & Performans Profili (Telefon, Tablet, PC için otomatik hız ayarı)
+  const [deviceProfile, setDeviceProfile] = useState<DeviceOptimizationProfile>(() =>
+    getDeviceOptimizationProfile()
+  );
+  const deviceProfileRef = useRef<DeviceOptimizationProfile>(deviceProfile);
+
+  useEffect(() => {
+    deviceProfileRef.current = deviceProfile;
+  }, [deviceProfile]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const nextProfile = getDeviceOptimizationProfile();
+      setDeviceProfile(nextProfile);
+      deviceProfileRef.current = nextProfile;
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [isCesiumReady, setIsCesiumReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -514,6 +540,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       try {
         viewerRef.current.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
       } catch (e) {}
+      // User request: "3d pasif aktif ise kml sınırları tamamen ekrana ortala"
+      if (activeParcelRef.current && activeParcelRef.current.coordinates && activeParcelRef.current.coordinates.length >= 3) {
+        setTimeout(() => {
+          centerOnParcel(deviceProfileRef.current.flyDuration);
+        }, 60);
+      }
     }
   }, [cameraState.isTouring, updateCameraView]);
 
@@ -594,8 +626,14 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   }, []);
 
   // Center camera precisely on the loaded parcel and immediately pre-stream satellite tiles
+  // Aspect ratio and FOV aware to guarantee KML boundaries are completely visible and centered on phone, tablet, and PC
   const centerOnParcel = useCallback(
-    (duration: number = 0.8, targetParcelOverride?: ParcelInfo) => {
+    (
+      duration: number = 0.7,
+      targetParcelOverride?: ParcelInfo,
+      targetPitchOverride?: number,
+      targetHeadingOverride?: number
+    ) => {
       const viewer = viewerRef.current;
       const targetParcel = targetParcelOverride || activeParcelRef.current || activeParcel;
       if (!viewer || typeof Cesium === 'undefined' || !targetParcel || !targetParcel.coordinates || targetParcel.coordinates.length < 3) return;
@@ -634,45 +672,62 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLng, centerLat, terrainHeight);
         parcelCenterRef.current = centerCartesian;
 
-        // Calculate bounding box with padding to frame parcel and preload surrounding satellite tiles
-        const spanLng = Math.max(maxLng - minLng, 0.0006);
-        const spanLat = Math.max(maxLat - minLat, 0.0006);
-        const padRatio = 0.35;
-        const parcelRect = Cesium.Rectangle.fromDegrees(
-          minLng - spanLng * padRatio,
-          minLat - spanLat * padRatio,
-          maxLng + spanLng * padRatio,
-          maxLat + spanLat * padRatio
-        );
-
-        // Optimal range estimate
         const cartesianPoints = coords.map((c) =>
           Cesium.Cartesian3.fromDegrees(c.lng, c.lat, terrainHeight)
         );
         const boundingSphere = Cesium.BoundingSphere.fromPoints(cartesianPoints);
         const radius = Math.max(boundingSphere.radius || 80, 30);
-        const optimalRange = Math.max(160, Math.min(3200, Math.round(radius * 2.5)));
+
+        // Aspect ratio & viewport aware optimal range:
+        // Guarantees all KML boundaries fit completely within the canvas without edge clipping on any screen ratio
+        const canvasWidth = viewer.canvas?.clientWidth || window.innerWidth || 800;
+        const canvasHeight = viewer.canvas?.clientHeight || window.innerHeight || 600;
+        const aspect = Math.max(0.2, canvasWidth / canvasHeight);
+        const fovY = viewer.camera?.frustum?.fovy || Cesium.Math.toRadians(60);
+        const tanHalfFovY = Math.tan(fovY / 2);
+        const tanHalfFovX = tanHalfFovY * aspect;
+
+        // Determine pitch:
+        let targetPitchDeg = typeof targetPitchOverride === 'number'
+          ? targetPitchOverride
+          : (pitchRef.current <= -75 ? -89.0 : pitchRef.current);
+
+        if (targetPitchDeg <= -88) {
+          targetPitchDeg = -89.0;
+        }
+
+        const isTopDown2D = targetPitchDeg <= -75;
+
+        // Comfortable padding (30% in 2D, 45% in 3D perspective to account for tilt foreshortening)
+        const padMultiplier = isTopDown2D ? 1.30 : 1.45;
+        const rangeY = (radius * padMultiplier) / tanHalfFovY;
+        const rangeX = (radius * padMultiplier) / tanHalfFovX;
+        let optimalRange = Math.max(rangeX, rangeY, radius * (isTopDown2D ? 2.2 : 2.7));
+        optimalRange = Math.max(120, Math.min(15000, Math.round(optimalRange)));
+
         rangeRef.current = optimalRange;
+
+        const targetHeadingDeg = typeof targetHeadingOverride === 'number'
+          ? targetHeadingOverride
+          : (isTopDown2D ? 0 : (headingRef.current || 0));
+
+        headingRef.current = targetHeadingDeg;
+        pitchRef.current = targetPitchDeg;
 
         // Prevent state re-renders from interrupting the smooth camera flight
         isFlyingRef.current = true;
 
-        // Synchronize canvas dimensions immediately
         try {
           viewer.resize();
         } catch (e) {}
 
-        // Release any existing lock on lookAt transform
         try {
           viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
         } catch (e) {}
 
-        // Varsayılan ayar: Kuşbakışı görüntü (-89.0° dik açı) ve KML ekrana tam ortalı
-        const targetPitchDeg = pitchRef.current <= -85 ? -89.0 : pitchRef.current;
         const targetPitchRad = Cesium.Math.toRadians(targetPitchDeg);
-        const targetHeadingRad = Cesium.Math.toRadians(headingRef.current || 0);
+        const targetHeadingRad = Cesium.Math.toRadians(targetHeadingDeg);
 
-        // KML parselini ekrana tam ortalayarak kuşbakışı odaklan
         try {
           viewer.camera.flyToBoundingSphere(boundingSphere, {
             offset: new Cesium.HeadingPitchRange(
@@ -688,7 +743,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 if (viewer.camera.positionCartographic) {
                   const actualHeight = Math.round(viewer.camera.positionCartographic.height);
                   rangeRef.current = actualHeight;
-                  onCameraChangeRef.current({ range: actualHeight });
+                  onCameraChangeRef.current({
+                    range: actualHeight,
+                    pitch: targetPitchDeg,
+                    heading: targetHeadingDeg,
+                    viewMode: isTopDown2D ? '2d' : '3d',
+                  });
                 }
                 viewer.scene.requestRender();
               } catch (e) {}
@@ -715,6 +775,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               isFlyingRef.current = false;
               try {
                 viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+                onCameraChangeRef.current({
+                  pitch: targetPitchDeg,
+                  heading: targetHeadingDeg,
+                  viewMode: isTopDown2D ? '2d' : '3d',
+                });
                 viewer.scene.requestRender();
               } catch (e) {}
             },
@@ -776,9 +841,9 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           },
         });
 
-        // Set device resolution scale: capped at 1.35x to avoid mobile GPU thermal stuttering while preserving crisp details
-        const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-        viewer.resolutionScale = Math.min(dpr, 1.35);
+        // Cihaz türüne (Telefon / Tablet / PC) göre otomatik çözünürlük ve arazi karo hassasiyeti
+        const profile = deviceProfileRef.current;
+        viewer.resolutionScale = profile.resolutionScale;
 
         // Ensure touch and gesture controls are active on mobile devices (Android & iOS)
         if (viewer.scene.screenSpaceCameraController) {
@@ -805,10 +870,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
-        // Optimize scene for smooth 60fps performance and fast satellite tile streaming
-        viewer.scene.globe.maximumScreenSpaceError = 1.5; // Fast tile loading and crisp imagery
-        viewer.scene.globe.tileCacheSize = 350; // Keep surrounding tiles cached to prevent re-fetching during 3D tours
-        viewer.scene.globe.loadingDescendantLimit = 24; // Stream parcel area tiles with high throughput
+        // Cihaza göre dinamik karo yükleme hızı ve bellek optimizasyonu (Akıcı 60 FPS)
+        viewer.scene.globe.maximumScreenSpaceError = profile.maximumScreenSpaceError;
+        viewer.scene.globe.tileCacheSize = profile.tier === 'phone' ? 200 : profile.tier === 'tablet' ? 280 : 380;
+        viewer.scene.globe.loadingDescendantLimit = profile.tier === 'phone' ? 16 : 24;
         viewer.scene.globe.preloadAncestors = true;
         viewer.scene.globe.preloadSiblings = false; // Prevents bandwidth contention
 
@@ -829,9 +894,14 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           },
         });
 
-        // Setup clock tick listener for continuous cinematic 3D tour (Throttled React notification for max speed)
+        // Setup clock tick listener for continuous cinematic 3D tour (Throttled React notification & delta-time for buttery 60fps)
         let lastHeadingNotification = 0;
+        let lastFrameTime = performance.now();
         const onTick = () => {
+          const now = performance.now();
+          const dt = Math.min((now - lastFrameTime) / 1000, 0.1); // clamped delta time
+          lastFrameTime = now;
+
           if (isTouringRef.current) {
             if (!parcelCenterRef.current && activeParcelRef.current?.coordinates?.length) {
               const coords = activeParcelRef.current.coordinates;
@@ -845,8 +915,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             }
 
             if (parcelCenterRef.current) {
-              const speed = tourSpeedRef.current || 0.3;
-              const nextHeading = (headingRef.current + speed) % 360;
+              const currentProf = deviceProfileRef.current;
+              const baseSpeed = tourSpeedRef.current || currentProf.tourSpeed;
+              // 60 FPS referanslı delta-time adımı: 60Hz, 90Hz ve 120Hz ekranlarda kasıntısız sabit hız
+              const headingStep = baseSpeed * (dt * 60);
+              const nextHeading = (headingRef.current + headingStep) % 360;
               headingRef.current = nextHeading;
 
               // Ensure 3D tour orbits from perspective angle, not degenerate -90
@@ -860,9 +933,8 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 viewer.scene.requestRender();
               }
 
-              // Throttle React state re-renders to 4Hz (250ms) to ensure 60fps buttery smooth rendering without UI lag
-              const now = performance.now();
-              if (now - lastHeadingNotification > 250) {
+              // Cihaz profilinin throttle frekansına göre React state güncelle (UI lag önleme)
+              if (now - lastHeadingNotification > currentProf.throttleNotificationMs) {
                 lastHeadingNotification = now;
                 onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
               }
@@ -954,10 +1026,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       }
 
       // 3D arazi açıldığında veya kapandığında parseli arazi yüksekliğine göre tam ortala
-      if (activeParcelRef.current && activeParcelRef.current.coordinates.length >= 3) {
+      if (activeParcelRef.current && activeParcelRef.current.coordinates && activeParcelRef.current.coordinates.length >= 3) {
         setTimeout(() => {
-          centerOnParcel(1.2);
-        }, 200);
+          centerOnParcel(deviceProfileRef.current.flyDuration);
+        }, 100);
       }
     } catch (e) {
       console.warn('Terrain toggle error:', e);
@@ -1410,9 +1482,53 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, []);
 
-  const flyToParcel = useCallback(() => {
-    centerOnParcel(0.8, activeParcel);
+  const set2DView = useCallback(() => {
+    isTouringRef.current = false;
+    const targetPitch = -89.0;
+    pitchRef.current = targetPitch;
+    headingRef.current = 0;
+    onCameraChangeRef.current({
+      isTouring: false,
+      pitch: targetPitch,
+      heading: 0,
+      viewMode: '2d',
+    });
+    centerOnParcel(
+      deviceProfileRef.current.flyDuration,
+      activeParcelRef.current || activeParcel,
+      targetPitch,
+      0
+    );
   }, [centerOnParcel, activeParcel]);
+
+  const set3DView = useCallback(() => {
+    isTouringRef.current = false;
+    const targetPitch = -38.0;
+    pitchRef.current = targetPitch;
+    onCameraChangeRef.current({
+      isTouring: false,
+      pitch: targetPitch,
+      viewMode: '3d',
+    });
+    centerOnParcel(
+      deviceProfileRef.current.flyDuration,
+      activeParcelRef.current || activeParcel,
+      targetPitch,
+      headingRef.current
+    );
+  }, [centerOnParcel, activeParcel]);
+
+  const flyToParcel = useCallback(
+    (targetPitch?: number, targetHeading?: number) => {
+      centerOnParcel(
+        deviceProfileRef.current.flyDuration,
+        activeParcelRef.current || activeParcel,
+        targetPitch,
+        targetHeading
+      );
+    },
+    [centerOnParcel, activeParcel]
+  );
 
   const flyToDeviceLocation = useCallback(() => {
     const viewer = viewerRef.current;
@@ -1540,9 +1656,21 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         isRecording,
         flyToParcel,
         flyToDeviceLocation,
+        set2DView,
+        set3DView,
       });
     }
-  }, [onViewerReady, takeSnapshot, startVideoRecording, stopVideoRecording, isRecording, flyToParcel, flyToDeviceLocation]);
+  }, [
+    onViewerReady,
+    takeSnapshot,
+    startVideoRecording,
+    stopVideoRecording,
+    isRecording,
+    flyToParcel,
+    flyToDeviceLocation,
+    set2DView,
+    set3DView,
+  ]);
 
   // Responsive device checks
   const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 640;
@@ -1690,9 +1818,42 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           </div>
         )}
 
-        {/* Ekran Sağı Dikey Çubuk: 3D Arazi (Aktif / Pasif) & GPS Konum Butonu - Ekrana oranla küçültülmüş & sadece altlık harita ekranında gösterilir */}
+        {/* Ekran Sağı Dikey Çubuk: 2D / 3D / 3D Arazi / Sınırları Ortala / GPS Konum - Ekrana oranla küçültülmüş & sadece altlık harita ekranında gösterilir */}
         {showMapControls && (
-          <div className="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none scale-75 sm:scale-85 md:scale-90 lg:scale-100 origin-right transition-all">
+          <div className="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none scale-75 sm:scale-85 md:scale-90 lg:scale-100 origin-right transition-all">
+            {/* 2D Kuşbakışı Düz Harita Butonu (Sınırları Ekrana Tam Ortalar) */}
+            <button
+              id="btn-view-2d-mode"
+              onClick={set2DView}
+              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
+                cameraState.pitch <= -75 && !cameraState.isTouring
+                  ? 'bg-sky-500/25 border-sky-400 text-sky-200 shadow-md shadow-sky-500/20 ring-1 ring-sky-400/40'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+              }`}
+              title="2D Kuşbakışı Düz Harita (KML Sınırlarını Ekrana Tam Ortalar)"
+            >
+              <span className="text-[11px] font-black tracking-tight leading-tight">2D</span>
+              <span className="text-[7px] font-bold text-sky-300 uppercase leading-none">DÜZ</span>
+            </button>
+
+            {/* 3D Perspektif Harita Butonu (Sınırları Ekrana Tam Ortalar) */}
+            <button
+              id="btn-view-3d-mode"
+              onClick={set3DView}
+              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
+                cameraState.pitch > -75 || cameraState.isTouring
+                  ? 'bg-amber-500/25 border-amber-400 text-amber-200 shadow-md shadow-amber-500/20 ring-1 ring-amber-400/40'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+              }`}
+              title="3D Perspektif Harita (KML Sınırlarını Ekrana Tam Ortalar)"
+            >
+              <span className="text-[11px] font-black tracking-tight leading-tight">3D</span>
+              <span className="text-[7px] font-bold text-amber-300 uppercase leading-none">KÜRE</span>
+            </button>
+
+            {/* Dikey Ayırıcı Çizgi */}
+            <div className="w-5 h-px bg-white/10 my-0.5" />
+
             {/* 3D Arazi (Aktif / Pasif) Butonu */}
             <button
               id="btn-terrain-toggle-vertical"
@@ -1704,16 +1865,16 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               }`}
               title={
                 isTerrainActive
-                  ? '3D Arazi Topoğrafyası Aktif (Kapatmak için dokunun)'
-                  : '3D Arazi Topoğrafyası Pasif (Açmak için dokunun)'
+                  ? '3D Arazi Topoğrafyası Aktif (Kapatmak için dokunun, sınırları ekrana ortalar)'
+                  : '3D Arazi Topoğrafyası Pasif (Açmak için dokunun, sınırları ekrana ortalar)'
               }
             >
               <Mountain
-                className={`w-4 h-4 transition-transform duration-200 group-hover:scale-110 ${
+                className={`w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110 ${
                   isTerrainActive ? 'text-emerald-400' : 'text-slate-400'
                 }`}
               />
-              <span className="text-[9px] font-bold mt-0.5 tracking-tight leading-tight">3D</span>
+              <span className="text-[8px] font-bold mt-0.5 tracking-tight leading-tight">ARAZİ</span>
               <span
                 className={`mt-0.5 px-1 py-0.5 rounded text-[7px] font-black tracking-wider uppercase leading-none ${
                   isTerrainActive
@@ -1722,6 +1883,19 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 }`}
               >
                 {isTerrainActive ? 'AKTİF' : 'PASİF'}
+              </span>
+            </button>
+
+            {/* KML Parsel Sınırlarını Ekrana Tam Ortala Butonu */}
+            <button
+              id="btn-center-parcel-fit"
+              onClick={() => flyToParcel()}
+              className="group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg bg-white/5 hover:bg-sky-500/20 active:bg-sky-500/30 border border-white/10 hover:border-sky-400/60 text-slate-200 hover:text-sky-300 transition-all duration-200 active:scale-95 cursor-pointer"
+              title="KML Parsel Sınırlarını Ekrana Tam Ortala"
+            >
+              <Crosshair className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition duration-200" />
+              <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
+                ORTALA
               </span>
             </button>
 
@@ -1737,15 +1911,21 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             >
               <div className="relative flex items-center justify-center">
                 <span className="absolute -inset-1 rounded-full bg-sky-400/20 group-hover:animate-ping opacity-0 group-hover:opacity-100 transition" />
-                <LocateFixed className="w-4 h-4 text-sky-400 group-hover:scale-110 transition duration-200" />
+                <LocateFixed className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition duration-200" />
               </div>
-              <span className="text-[9px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
-                Konum
-              </span>
-              <span className="mt-0.5 px-1 py-0.5 rounded text-[7px] font-semibold text-sky-400/80 font-mono leading-none">
-                GPS
+              <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
+                KONUM
               </span>
             </button>
+          </div>
+        )}
+
+        {/* Otomatik Cihaz Hız & Performans Optimizasyon Rozeti (Ekran Sol Alt) */}
+        {showMapControls && (
+          <div className="absolute bottom-2.5 left-2.5 z-20 hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-950/80 backdrop-blur-md border border-white/10 text-[10px] text-slate-300 pointer-events-none select-none shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
+            <span className="font-semibold text-sky-300">{deviceProfile.shortLabel}</span>
+            <span className="text-slate-400">• Otomatik Hız & 60 FPS Optimize</span>
           </div>
         )}
 

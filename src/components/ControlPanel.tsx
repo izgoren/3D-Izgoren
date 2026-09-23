@@ -37,6 +37,9 @@ import {
   BookmarkCheck,
   RotateCcw,
   Scaling,
+  Crosshair,
+  Cpu,
+  Zap,
 } from 'lucide-react';
 import {
   BaseMapType,
@@ -47,6 +50,7 @@ import {
   WatermarkConfig,
 } from '../types';
 import { parseKMLString, parseKMZFile, parseGeoJSON, formatArea } from '../utils/geoUtils';
+import { getDeviceOptimizationProfile } from '../utils/deviceOptimizer';
 import { ViewerMethods } from './CesiumViewer';
 import { PWAInstallButton } from './PWAInstallButton';
 import { ParcelTab } from './ParcelTab';
@@ -142,6 +146,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   };
 
   const detectedDeviceInfo = getDeviceInfo();
+  const deviceOptimizationProfile = getDeviceOptimizationProfile();
 
   const handleApplySpecificDevice = (type: 'phone' | 'tablet' | 'pc') => {
     if (type === 'phone') {
@@ -322,6 +327,23 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </button>
 
           <div className="flex items-center gap-1 shrink-0">
+            {/* 2D / 3D Hızlı Buton */}
+            <button
+              onClick={() => {
+                if (cameraState.pitch <= -75 && !cameraState.isTouring) {
+                  viewerMethods?.set3DView();
+                } else {
+                  viewerMethods?.set2DView();
+                }
+              }}
+              className="h-10 px-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white flex items-center justify-center font-black text-xs active:scale-95 transition cursor-pointer"
+              title="2D / 3D Görünüm Değiştir (Sınırları Ortala)"
+            >
+              <span className={cameraState.pitch <= -75 && !cameraState.isTouring ? 'text-sky-400' : 'text-amber-400'}>
+                {cameraState.pitch <= -75 && !cameraState.isTouring ? '2D' : '3D'}
+              </span>
+            </button>
+
             {/* GPS Konum Butonu */}
             <button
               onClick={() => viewerMethods?.flyToDeviceLocation()}
@@ -510,6 +532,79 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {/* TAB: 3D TUR & HARİTA */}
             {activeTab === 'camera' && (
               <div className="space-y-4">
+                {/* 2D & 3D Görünüm Modu ve Otomatik Kadraj Ortalama */}
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Harita Görünüm Modu</span>
+                    </label>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-bold border border-sky-400/30">
+                      {cameraState.pitch <= -75 && !cameraState.isTouring ? '2D Kuşbakışı' : '3D Perspektif'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* 2D Kuşbakışı Düz Harita Butonu */}
+                    <button
+                      type="button"
+                      onClick={() => viewerMethods?.set2DView()}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer active:scale-95 ${
+                        cameraState.pitch <= -75 && !cameraState.isTouring
+                          ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold shadow-md shadow-sky-500/25 ring-1 ring-sky-400'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <span>🗺️ 2D Kuşbakışı</span>
+                      </div>
+                      <span
+                        className={`text-[9px] ${
+                          cameraState.pitch <= -75 && !cameraState.isTouring
+                            ? 'text-slate-950/80 font-semibold'
+                            : 'text-slate-400'
+                        }`}
+                      >
+                        Tam Düz & Sınırları Ortala
+                      </span>
+                    </button>
+
+                    {/* 3D Perspektif Harita Butonu */}
+                    <button
+                      type="button"
+                      onClick={() => viewerMethods?.set3DView()}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer active:scale-95 ${
+                        cameraState.pitch > -75 || cameraState.isTouring
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/25 ring-1 ring-amber-400'
+                          : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <span>🌐 3D Perspektif</span>
+                      </div>
+                      <span
+                        className={`text-[9px] ${
+                          cameraState.pitch > -75 || cameraState.isTouring
+                            ? 'text-slate-950/80 font-semibold'
+                            : 'text-slate-400'
+                        }`}
+                      >
+                        Küresel & Sınırları Ortala
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* KML Parsel Sınırlarını Ekrana Tam Ortala Butonu */}
+                  <button
+                    type="button"
+                    onClick={() => viewerMethods?.flyToParcel()}
+                    className="w-full py-2 px-3 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-sky-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer"
+                  >
+                    <Crosshair className="w-3.5 h-3.5 text-sky-400" />
+                    <span>🎯 KML Sınırlarını Ekrana Tam Ortala</span>
+                  </button>
+                </div>
+
                 {/* 3D Cinematic Tour Main Button */}
                 <button
                   onClick={handleToggleTour}
@@ -531,6 +626,37 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     </>
                   )}
                 </button>
+
+                {/* Otomatik Cihaz Hız & 60 FPS Optimizasyon Kartı */}
+                <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 border border-emerald-400/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Otomatik Cihaz Hız Optimizasyonu</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-mono font-bold">
+                      {deviceOptimizationProfile.shortLabel}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    {deviceOptimizationProfile.tier === 'phone'
+                      ? 'Telefon işlemcisine ve dokunmatik ekrana göre 3D tur dönüş hızı ve grafik bellek kullanımı ultra akıcı 60 FPS için optimize edildi.'
+                      : deviceOptimizationProfile.tier === 'tablet'
+                      ? 'Tablet ekran çözünürlüğüne göre 3D tur dönüş hızı ve harita karo akışı otomatik dengelendi.'
+                      : 'Masaüstü yüksek performanslı GPU donanım ivmelendirmesi aktif. Maksimum 3D dönüş akıcılığı ve kristal netlik.'}
+                  </p>
+                  <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[10px]">
+                    <span className="text-slate-400">Önerilen Tur Hızı:</span>
+                    <button
+                      type="button"
+                      onClick={() => onCameraChange({ tourSpeed: deviceOptimizationProfile.tourSpeed })}
+                      className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-mono font-bold transition cursor-pointer"
+                      title="Cihaz hızına göre kalibre et"
+                    >
+                      ⚡ {deviceOptimizationProfile.tourSpeed.toFixed(1)}x (Sıfırla)
+                    </button>
+                  </div>
+                </div>
 
                 {/* Altlık Harita Katmanları (Google & Esri - Yandex Kaldırıldı) */}
                 <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2.5">

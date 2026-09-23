@@ -9,6 +9,7 @@ export interface CameraState {
   tourSpeed: number; // speed multiplier, e.g. 0.3
   isTouring: boolean;
   elevation: number; // calculated altitude above ground
+  viewMode?: '2d' | '3d'; // 2D Kuşbakışı veya 3D Perspektif Modu
 }
 
 export interface ParcelCoordinate {

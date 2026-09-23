@@ -16,6 +16,7 @@ import { AppUpdateChecker } from './components/AppUpdateChecker';
 import { IzgorenAdScreen } from './components/IzgorenAdScreen';
 import { parseKMZFile, parseKMLString, parseGeoJSON } from './utils/geoUtils';
 import { loadDefaultCompanyInfo } from './utils/watermarkStorage';
+import { getDeviceOptimizationProfile } from './utils/deviceOptimizer';
 import {
   Smartphone,
   Square,
@@ -50,14 +51,18 @@ export default function App() {
     return false;
   });
 
-  // 3D Camera State - Varsayılan ayar: Kuşbakışı görüntü (pitch: -90, heading: 0)
-  const [cameraState, setCameraState] = useState<CameraState>({
-    pitch: -90,
-    heading: 0,
-    range: 650,
-    tourSpeed: 0.3,
-    isTouring: false,
-    elevation: 0,
+  // 3D Camera State - Cihaz sınıfına (Telefon, Tablet, PC) göre otomatik hız optimizasyonu
+  const [cameraState, setCameraState] = useState<CameraState>(() => {
+    const prof = getDeviceOptimizationProfile();
+    return {
+      pitch: -89.0,
+      heading: 0,
+      range: 650,
+      tourSpeed: prof.tourSpeed,
+      isTouring: false,
+      elevation: 0,
+      viewMode: '2d',
+    };
   });
 
   // Active Loaded Parcel (Null by default so real current location is shown on startup)
@@ -454,6 +459,32 @@ export default function App() {
                 )}
               </div>
 
+              {/* 2D / 3D Görünüm Modu Seçici (Kuşbakışı 2D veya Perspektif 3D - Sınırları Ekrana Tam Ortalar) */}
+              <div className="flex items-center rounded-xl bg-slate-950/85 p-0.5 border border-white/15 backdrop-blur-xl shrink-0 shadow-lg">
+                <button
+                  onClick={() => viewerMethods?.set2DView()}
+                  className={`px-2 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                    cameraState.pitch <= -75 && !cameraState.isTouring
+                      ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="2D Kuşbakışı Düz Harita (KML Sınırlarını Ekrana Tam Ortalar)"
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => viewerMethods?.set3DView()}
+                  className={`px-2 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                    cameraState.pitch > -75 || cameraState.isTouring
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="3D Perspektif Harita (KML Sınırlarını Ekrana Tam Ortalar)"
+                >
+                  3D
+                </button>
+              </div>
+
               {/* 3D Tur Hızlı Buton */}
               <button
                 onClick={() => {
@@ -584,7 +615,12 @@ export default function App() {
           parcelStyle={parcelStyle}
           watermarkConfig={watermarkConfig}
           isTerrainActive={isTerrainActive}
-          onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
+          onToggleTerrain={() => {
+            setIsTerrainActive((prev) => !prev);
+            setTimeout(() => {
+              viewerMethods?.flyToParcel();
+            }, 120);
+          }}
           onViewerReady={setViewerMethods}
           screenHeightPercent={screenHeightPercent}
           showMapControls={!showSplash}
