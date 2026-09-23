@@ -1940,38 +1940,6 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             {/* Dikey Ayırıcı Çizgi */}
             <div className="w-5 h-px bg-white/10 my-0.5" />
 
-            {/* 3D Arazi (Aktif / Pasif) Butonu */}
-            <button
-              id="btn-terrain-toggle-vertical"
-              onClick={onToggleTerrain}
-              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
-                isTerrainActive
-                  ? 'bg-emerald-500/20 border-emerald-400/80 text-emerald-300 shadow-md shadow-emerald-500/20'
-                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
-              }`}
-              title={
-                isTerrainActive
-                  ? '3D Arazi Topoğrafyası Aktif (Kapatmak için dokunun, sınırları ekrana ortalar)'
-                  : '3D Arazi Topoğrafyası Pasif (Açmak için dokunun, sınırları ekrana ortalar)'
-              }
-            >
-              <Mountain
-                className={`w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110 ${
-                  isTerrainActive ? 'text-emerald-400' : 'text-slate-400'
-                }`}
-              />
-              <span className="text-[8px] font-bold mt-0.5 tracking-tight leading-tight">ARAZİ</span>
-              <span
-                className={`mt-0.5 px-1 py-0.5 rounded text-[7px] font-black tracking-wider uppercase leading-none ${
-                  isTerrainActive
-                    ? 'bg-emerald-400 text-slate-950 font-bold'
-                    : 'bg-white/10 text-slate-400'
-                }`}
-              >
-                {isTerrainActive ? 'AKTİF' : 'PASİF'}
-              </span>
-            </button>
-
             {/* KML Parsel Sınırlarını Ekrana Tam Ortala Butonu */}
             <button
               id="btn-center-parcel-fit"
