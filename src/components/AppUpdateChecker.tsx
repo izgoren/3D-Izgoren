@@ -234,7 +234,11 @@ export const AppUpdateChecker: React.FC = () => {
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-cyan-400 font-bold shrink-0">✓</span>
-                    <span><strong className="text-white">3D Motion Tracking (Kamera & Parsel Takip):</strong> Drone gayrimenkul videoları için parsel merkezine kilitlenen 3D sinematik callout HUD kutusu, dikey radar lider çizgisi ve 3D takip nişangahı.</span>
+                    <span><strong className="text-white">Pen Tool KML Takip & Çizim Efekti:</strong> KML sınır çizgilerini seçili stil parametrelerine (renk, kalınlık, neon ışıma, kesikli çizgi) göre pürüzsüzce çizen ve takip eden 3D Pen Tool animasyonu.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-rose-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">Kuzeye Döndür (Pusula) Butonu:</strong> Konum butonunun hemen yanında anlık yön açısını gösteren ve tek dokunuşla haritayı 0° Tam Kuzey yönüne çeviren pusula butonu.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-indigo-400 font-bold shrink-0">✓</span>

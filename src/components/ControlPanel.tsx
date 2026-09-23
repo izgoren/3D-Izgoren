@@ -40,6 +40,7 @@ import {
   Crosshair,
   Cpu,
   Zap,
+  PenTool,
 } from 'lucide-react';
 import {
   BaseMapType,
@@ -1180,108 +1181,90 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   />
                 </div>
 
-                {/* 3D Motion Tracking (Kamera & Parsel Takip) */}
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-500/15 via-indigo-500/15 to-purple-500/15 border border-sky-400/40 shadow-lg shadow-sky-500/5 space-y-3">
+                {/* Pen Tool (KML Çizgilerini Takip Eden Çizim Aracı) */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-500/15 via-blue-500/15 to-indigo-500/15 border border-sky-400/40 shadow-lg shadow-sky-500/5 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0">
-                        <Crosshair className="w-4 h-4" />
+                        <PenTool className="w-4 h-4" />
                       </div>
                       <div className="flex flex-col">
                         <span className="text-white font-bold flex items-center gap-1.5 text-xs">
-                          <span>3D Motion Tracking</span>
+                          <span>Pen Tool (Çizim & Sınır Takibi)</span>
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-400/20 text-sky-300 border border-sky-400/30">
-                            HUD
+                            PRO
                           </span>
                         </span>
                         <span className="text-[10px] text-slate-300">
-                          Drone videoları için 3D kamera takip callout'u ve radar lider çizgisi
+                          KML sınır çizgilerini belirlediğiniz stil ayarlarına göre çizerek takip eder
                         </span>
                       </div>
                     </div>
                     <input
                       type="checkbox"
-                      checked={parcelStyle.motionTracking}
-                      onChange={(e) => onParcelStyleChange({ motionTracking: e.target.checked })}
+                      checked={parcelStyle.penTool}
+                      onChange={(e) => onParcelStyleChange({ penTool: e.target.checked })}
                       className="w-4 h-4 accent-sky-400 cursor-pointer rounded shrink-0 ml-2"
                     />
                   </div>
 
-                  {parcelStyle.motionTracking && (
+                  {parcelStyle.penTool && (
                     <div className="space-y-3 pt-2 border-t border-white/10 animate-in fade-in duration-200">
-                      {/* Takip Modu Seçimi */}
+                      {/* Çizim Hızı & Kalem Ucu Seçenekleri */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-300">Kalem Ucu İmleci (3D Nib):</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={parcelStyle.showPenNib !== false}
+                            onChange={(e) => onParcelStyleChange({ showPenNib: e.target.checked })}
+                            className="w-3.5 h-3.5 accent-sky-400 cursor-pointer rounded"
+                          />
+                          <span className="text-[11px] text-slate-200 font-medium">Göster</span>
+                        </label>
+                      </div>
+
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-medium text-slate-300 flex items-center justify-between">
-                          <span>Takip Modu:</span>
+                          <span>Takip & Çizim Hızı:</span>
                           <span className="text-[10px] font-mono text-sky-400">
-                            {parcelStyle.motionTrackingMode === 'corner_pins'
-                              ? 'Köşe Parantezleri'
-                              : parcelStyle.motionTrackingMode === 'target_crosshair'
-                              ? '3D Nişangah'
-                              : 'Sinematik Callout'}
+                            {(parcelStyle.penToolSpeed || 1) === 0.5
+                              ? '0.5x (Ağır)'
+                              : (parcelStyle.penToolSpeed || 1) === 2
+                              ? '2.0x (Hızlı)'
+                              : '1.0x (Normal)'}
                           </span>
                         </label>
                         <div className="grid grid-cols-3 gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => onParcelStyleChange({ motionTrackingMode: 'cinematic_callout' })}
-                            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex flex-col items-center gap-1 ${
-                              (parcelStyle.motionTrackingMode || 'cinematic_callout') === 'cinematic_callout'
-                                ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
-                                : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            <span>🎬 Callout</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onParcelStyleChange({ motionTrackingMode: 'target_crosshair' })}
-                            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex flex-col items-center gap-1 ${
-                              parcelStyle.motionTrackingMode === 'target_crosshair'
-                                ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
-                                : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            <span>🎯 Nişangah</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onParcelStyleChange({ motionTrackingMode: 'corner_pins' })}
-                            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex flex-col items-center gap-1 ${
-                              parcelStyle.motionTrackingMode === 'corner_pins'
-                                ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
-                                : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            <span>📐 Köşeler [⌖]</span>
-                          </button>
+                          {[
+                            { label: '0.5x Yavaş', val: 0.5 },
+                            { label: '1.0x Normal', val: 1 },
+                            { label: '2.0x Hızlı', val: 2 },
+                          ].map((item) => (
+                            <button
+                              key={item.val}
+                              type="button"
+                              onClick={() => onParcelStyleChange({ penToolSpeed: item.val })}
+                              className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition cursor-pointer flex justify-center items-center ${
+                                (parcelStyle.penToolSpeed || 1) === item.val
+                                  ? 'bg-sky-500/20 border-sky-400 text-sky-200 font-bold'
+                                  : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Lider Çizgisi İrtifa Yüksekliği */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-300 text-[11px]">3D İrtifa Yüksekliği:</span>
-                          <span className="text-sky-400 font-mono font-bold text-[11px]">
-                            {parcelStyle.motionTrackingHeight || 35} m
-                          </span>
+                      {/* Stil Uyumluluk Bilgisi */}
+                      <div className="p-2 rounded-lg bg-black/40 border border-white/10 text-[10px] text-slate-300 space-y-1">
+                        <div className="flex items-center gap-1.5 text-sky-300 font-semibold">
+                          <span>✓ Aktif Stil Ayarlarıyla Birebir Senkron:</span>
                         </div>
-                        <input
-                          type="range"
-                          min={15}
-                          max={80}
-                          step={5}
-                          value={parcelStyle.motionTrackingHeight || 35}
-                          onChange={(e) =>
-                            onParcelStyleChange({ motionTrackingHeight: Number(e.target.value) })
-                          }
-                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
-                        />
-                        <div className="flex justify-between text-[9px] text-slate-500">
-                          <span>15m (Alçak)</span>
-                          <span>35m (Standart)</span>
-                          <span>80m (Yüksek İrtifa)</span>
-                        </div>
+                        <p className="text-slate-400 leading-tight">
+                          Pen Tool, seçili olan renk ({parcelStyle.borderColor || '#38bdf8'}), kalınlık ({parcelStyle.borderWidth}px), {parcelStyle.glowEffect ? 'neon parlama' : 'düz çizgi'} ve {parcelStyle.dashedBorder ? 'kesikli çizgi' : 'tam çizgi'} parametrelerine tam uyumlu olarak KML sınır hattını izler.
+                        </p>
                       </div>
                     </div>
                   )}

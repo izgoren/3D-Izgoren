@@ -78,9 +78,9 @@ export default function App() {
     dashedBorder: false,
     glowEffect: true,
     showStartEndMarkers: false,
-    motionTracking: false,
-    motionTrackingMode: 'cinematic_callout',
-    motionTrackingHeight: 35,
+    penTool: false,
+    penToolSpeed: 1,
+    showPenNib: true,
   });
 
   // Watermark Banner Config (Defaults restored from localStorage if previously saved)
