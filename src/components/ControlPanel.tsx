@@ -306,11 +306,29 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const areaDetails = activeParcel ? formatArea(activeParcel.areaM2) : null;
 
   const handleToggleTour = () => {
-    const nextTouring = !cameraState.isTouring;
-    if (nextTouring && cameraState.pitch < -65) {
-      onCameraChange({ isTouring: true, pitch: -38 });
+    if (viewerMethods?.toggle3DTour) {
+      viewerMethods.toggle3DTour();
     } else {
-      onCameraChange({ isTouring: nextTouring });
+      const is3D = cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode);
+      if (is3D) {
+        onCameraChange({ isTouring: false });
+      } else {
+        const nextPitch = cameraState.pitch < -65 ? -38 : cameraState.pitch;
+        onCameraChange({ isTouring: true, tourMode: '3d', pitch: nextPitch, viewMode: '3d' });
+      }
+    }
+  };
+
+  const handleToggle2DTour = () => {
+    if (viewerMethods?.toggle2DTour) {
+      viewerMethods.toggle2DTour();
+    } else {
+      const is2D = cameraState.isTouring && cameraState.tourMode === '2d';
+      if (is2D) {
+        onCameraChange({ isTouring: false });
+      } else {
+        onCameraChange({ isTouring: true, tourMode: '2d', pitch: -89.9, viewMode: '2d' });
+      }
     }
   };
 
@@ -355,16 +373,30 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <span className="text-[11px] font-bold text-sky-200">Konum</span>
             </button>
 
+            {/* 2D Tur Butonu */}
+            <button
+              onClick={handleToggle2DTour}
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition active:scale-95 cursor-pointer ${
+                cameraState.isTouring && cameraState.tourMode === '2d'
+                  ? 'bg-sky-500 text-slate-950 border-sky-400 font-black shadow-lg shadow-sky-500/30 animate-pulse'
+                  : 'bg-white/10 text-sky-400 border-white/15'
+              }`}
+              title="2D Kuşbakışı Tur"
+            >
+              <RotateCw className={`w-4 h-4 ${cameraState.isTouring && cameraState.tourMode === '2d' ? 'animate-spin' : ''}`} />
+            </button>
+
+            {/* 3D Tur Butonu */}
             <button
               onClick={handleToggleTour}
               className={`w-10 h-10 rounded-xl border flex items-center justify-center transition active:scale-95 cursor-pointer ${
-                cameraState.isTouring
-                  ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-lg shadow-red-500/30'
-                  : 'bg-white/10 text-sky-400 border-white/15'
+                cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode)
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-lg shadow-amber-500/30 animate-pulse'
+                  : 'bg-white/10 text-amber-400 border-white/15'
               }`}
-              title="3D Tur"
+              title="3D Perspektif Tur"
             >
-              <Rotate3d className={`w-4 h-4 ${cameraState.isTouring ? 'animate-spin' : ''}`} />
+              <Rotate3d className={`w-4 h-4 ${cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'animate-spin' : ''}`} />
             </button>
 
             <button
@@ -606,27 +638,48 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </button>
                 </div>
 
-                {/* 3D Cinematic Tour Main Button */}
-                <button
-                  onClick={handleToggleTour}
-                  className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg cursor-pointer active:scale-98 ${
-                    cameraState.isTouring
-                      ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-500/30'
-                      : 'bg-gradient-to-r from-sky-500 to-blue-600 text-slate-950 shadow-sky-500/30'
-                  }`}
-                >
-                  {cameraState.isTouring ? (
-                    <>
-                      <Square className="w-4 h-4 fill-white" />
-                      <span>Sinematik Turu Durdur</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 fill-slate-950" />
-                      <span>3D Sinematik Turu Başlat</span>
-                    </>
-                  )}
-                </button>
+                {/* 2D ve 3D Tur Butonları */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* 2D Kuşbakışı Tur */}
+                  <button
+                    onClick={handleToggle2DTour}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition shadow-lg cursor-pointer active:scale-98 border ${
+                      cameraState.isTouring && cameraState.tourMode === '2d'
+                        ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sky-500/30'
+                        : 'bg-white/5 hover:bg-sky-500/20 border-white/10 hover:border-sky-400/50 text-sky-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <RotateCw className={`w-4 h-4 ${cameraState.isTouring && cameraState.tourMode === '2d' ? 'animate-spin text-slate-950' : 'text-sky-400'}`} />
+                      <span className="text-xs">
+                        {cameraState.isTouring && cameraState.tourMode === '2d' ? 'Durdur' : '2D Tur Başlat'}
+                      </span>
+                    </div>
+                    <span className="text-[9px] opacity-80 font-normal">
+                      360° Dönen Düz Harita
+                    </span>
+                  </button>
+
+                  {/* 3D Perspektif Tur */}
+                  <button
+                    onClick={handleToggleTour}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition shadow-lg cursor-pointer active:scale-98 border ${
+                      cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode)
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-amber-500/30'
+                        : 'bg-white/5 hover:bg-amber-500/20 border-white/10 hover:border-amber-400/50 text-amber-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Rotate3d className={`w-4 h-4 ${cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'animate-spin text-slate-950' : 'text-amber-400'}`} />
+                      <span className="text-xs">
+                        {cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'Durdur' : '3D Tur Başlat'}
+                      </span>
+                    </div>
+                    <span className="text-[9px] opacity-80 font-normal">
+                      Sinematik 3D Yörünge
+                    </span>
+                  </button>
+                </div>
 
                 {/* Otomatik Cihaz Hız & 60 FPS Optimizasyon Kartı */}
                 <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 border border-emerald-400/30 space-y-2">
@@ -1190,13 +1243,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       </div>
                       <div className="flex flex-col">
                         <span className="text-white font-bold flex items-center gap-1.5 text-xs">
-                          <span>Pen Tool (Çizim & Sınır Takibi)</span>
+                          <span>KML Çizim Animasyonu (Silerek Takip)</span>
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-400/20 text-sky-300 border border-sky-400/30">
                             PRO
                           </span>
                         </span>
                         <span className="text-[10px] text-slate-300">
-                          KML sınır çizgilerini belirlediğiniz stil ayarlarına göre çizerek takip eder
+                          Sınırı silerek sıfırdan çizer, çizim tamamlanınca tüm sınır ve parseli kapatır
                         </span>
                       </div>
                     </div>
@@ -1210,23 +1263,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
                   {parcelStyle.penTool && (
                     <div className="space-y-3 pt-2 border-t border-white/10 animate-in fade-in duration-200">
-                      {/* Çizim Hızı & Kalem Ucu Seçenekleri */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-slate-300">Kalem Ucu İmleci (3D Nib):</span>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={parcelStyle.showPenNib !== false}
-                            onChange={(e) => onParcelStyleChange({ showPenNib: e.target.checked })}
-                            className="w-3.5 h-3.5 accent-sky-400 cursor-pointer rounded"
-                          />
-                          <span className="text-[11px] text-slate-200 font-medium">Göster</span>
-                        </label>
-                      </div>
-
+                      {/* Çizim Hızı Seçenekleri */}
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-medium text-slate-300 flex items-center justify-between">
-                          <span>Takip & Çizim Hızı:</span>
+                          <span>Çizim & Tamamlama Hızı:</span>
                           <span className="text-[10px] font-mono text-sky-400">
                             {(parcelStyle.penToolSpeed || 1) === 0.5
                               ? '0.5x (Ağır)'
@@ -1263,7 +1303,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                           <span>✓ Aktif Stil Ayarlarıyla Birebir Senkron:</span>
                         </div>
                         <p className="text-slate-400 leading-tight">
-                          Pen Tool, seçili olan renk ({parcelStyle.borderColor || '#38bdf8'}), kalınlık ({parcelStyle.borderWidth}px), {parcelStyle.glowEffect ? 'neon parlama' : 'düz çizgi'} ve {parcelStyle.dashedBorder ? 'kesikli çizgi' : 'tam çizgi'} parametrelerine tam uyumlu olarak KML sınır hattını izler.
+                          Çizgi rengi ({parcelStyle.borderColor || '#38bdf8'}), kalınlık ({parcelStyle.borderWidth}px), {parcelStyle.glowEffect ? 'neon parlama' : 'düz çizgi'} ve {parcelStyle.dashedBorder ? 'kesikli çizgi' : 'tam çizgi'} parametreleriyle KML sınırını silerek takip edip tamamlar.
                         </p>
                       </div>
                     </div>
@@ -1478,8 +1518,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
                   <input
                     type="range"
-                    min="50"
-                    max="180"
+                    min="40"
+                    max="220"
                     step="5"
                     value={Math.round((watermarkConfig.scale ?? 1.0) * 100)}
                     onChange={(e) =>
@@ -1488,26 +1528,27 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     className="w-full accent-sky-400 cursor-pointer h-1.5 bg-white/10 rounded-lg"
                   />
 
-                  <div className="grid grid-cols-5 gap-1 pt-0.5">
+                  <div className="grid grid-cols-6 gap-1 pt-0.5">
                     {[
-                      { val: 0.7, label: '%70', desc: 'Kompakt' },
-                      { val: 0.85, label: '%85', desc: 'Küçük' },
+                      { val: 0.6, label: '%60', desc: 'Mini' },
+                      { val: 0.8, label: '%80', desc: 'Küçük' },
                       { val: 1.0, label: '%100', desc: 'Standart' },
-                      { val: 1.2, label: '%120', desc: 'Büyük' },
-                      { val: 1.4, label: '%140', desc: 'Geniş' },
+                      { val: 1.25, label: '%125', desc: 'Büyük' },
+                      { val: 1.5, label: '%150', desc: 'Geniş' },
+                      { val: 2.0, label: '%200', desc: 'Dev' },
                     ].map((preset) => (
                       <button
                         key={preset.val}
                         type="button"
                         onClick={() => onWatermarkChange({ scale: preset.val })}
-                        className={`py-1 px-1 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
+                        className={`py-1 px-0.5 rounded-lg border text-center transition cursor-pointer active:scale-95 ${
                           Math.round((watermarkConfig.scale ?? 1.0) * 100) === Math.round(preset.val * 100)
                             ? 'bg-sky-500 text-slate-950 font-bold border-sky-400'
                             : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                         }`}
                       >
                         <div className="text-[10px] font-bold">{preset.label}</div>
-                        <div className="text-[8px] opacity-75">{preset.desc}</div>
+                        <div className="text-[7px] opacity-75">{preset.desc}</div>
                       </button>
                     ))}
                   </div>
@@ -1541,7 +1582,33 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
                 {/* Filigran Kartı Konumu */}
                 <div className="pt-2 border-t border-white/10">
-                  <label className="text-[11px] text-slate-400 block mb-1.5">Ana Filigran Konumu:</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] text-slate-400 block">Ana Filigran Konumu:</label>
+                    {watermarkConfig.customPosition && (
+                      <button
+                        type="button"
+                        onClick={() => onWatermarkChange({ customPosition: null })}
+                        className="text-[10px] text-amber-300 hover:text-amber-200 underline font-semibold cursor-pointer"
+                        title="Ekranda serbest sürüklenmiş konumu iptal et ve köşeye sabitle"
+                      >
+                        Köşeye Sıfırla
+                      </button>
+                    )}
+                  </div>
+
+                  {watermarkConfig.customPosition && (
+                    <div className="flex items-center justify-between gap-2 p-1.5 mb-2 rounded-lg bg-sky-500/10 border border-sky-400/30 text-[10px]">
+                      <span className="text-sky-300 font-medium">📌 Ekranda Serbest Kaydırılmış Konum Aktif</span>
+                      <button
+                        type="button"
+                        onClick={() => onWatermarkChange({ customPosition: null })}
+                        className="px-2 py-0.5 rounded bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-[9px] shrink-0"
+                      >
+                        Sabitle
+                      </button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
                       { id: 'bottom-right', label: 'Sağ Alt' },
@@ -1553,9 +1620,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     ].map((pos) => (
                       <button
                         key={pos.id}
-                        onClick={() => onWatermarkChange({ position: pos.id as any })}
+                        onClick={() => onWatermarkChange({ position: pos.id as any, customPosition: null })}
                         className={`py-1.5 px-2 rounded-lg border text-[11px] font-medium transition ${
-                          watermarkConfig.position === pos.id
+                          !watermarkConfig.customPosition && watermarkConfig.position === pos.id
                             ? 'bg-sky-500 text-slate-950 font-bold border-sky-400'
                             : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                         }`}
@@ -1711,16 +1778,30 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             <button
               type="button"
-              onClick={handleToggleTour}
-              className={`flex-1 h-9 px-2.5 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer ${
-                cameraState.isTouring
-                  ? 'bg-red-500 text-white border-red-400 animate-pulse shadow-md shadow-red-500/30'
+              onClick={handleToggle2DTour}
+              className={`flex-1 h-9 px-1.5 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition cursor-pointer ${
+                cameraState.isTouring && cameraState.tourMode === '2d'
+                  ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold animate-pulse shadow-md shadow-sky-500/30'
                   : 'bg-white/10 text-sky-400 border-white/15 hover:bg-white/15'
               }`}
-              title="3D Kamera Turu"
+              title="2D Kuşbakışı Tur"
             >
-              <Rotate3d className={`w-3.5 h-3.5 ${cameraState.isTouring ? 'animate-spin' : ''}`} />
-              <span>{cameraState.isTouring ? 'Durdur' : '3D Tur'}</span>
+              <RotateCw className={`w-3.5 h-3.5 ${cameraState.isTouring && cameraState.tourMode === '2d' ? 'animate-spin' : ''}`} />
+              <span>{cameraState.isTouring && cameraState.tourMode === '2d' ? 'Durdur' : '2D Tur'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleTour}
+              className={`flex-1 h-9 px-1.5 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition cursor-pointer ${
+                cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode)
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold animate-pulse shadow-md shadow-amber-500/30'
+                  : 'bg-white/10 text-amber-400 border-white/15 hover:bg-white/15'
+              }`}
+              title="3D Perspektif Tur"
+            >
+              <Rotate3d className={`w-3.5 h-3.5 ${cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'animate-spin' : ''}`} />
+              <span>{cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'Durdur' : '3D Tur'}</span>
             </button>
 
             {viewerMethods?.isRecording ? (

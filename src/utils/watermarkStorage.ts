@@ -13,6 +13,7 @@ export interface DefaultCompanyInfo {
   opacity?: number;
   scale?: number;
   showLocationBadge?: boolean;
+  customPosition?: { xRatio: number; yRatio: number } | null;
   savedAt?: string;
 }
 
@@ -32,6 +33,7 @@ export function saveDefaultCompanyInfo(config: WatermarkConfig): boolean {
       opacity: typeof config.opacity === 'number' ? config.opacity : 0.85,
       scale: typeof config.scale === 'number' ? config.scale : 1.0,
       showLocationBadge: config.showLocationBadge ?? true,
+      customPosition: config.customPosition || null,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(WATERMARK_STORAGE_KEY, JSON.stringify(dataToSave));

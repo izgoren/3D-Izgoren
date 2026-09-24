@@ -28,6 +28,7 @@ import {
   SlidersHorizontal,
   Video as VideoIcon,
   Rotate3d,
+  RotateCw,
   LocateFixed,
   Compass,
   Scaling,
@@ -80,7 +81,6 @@ export default function App() {
     showStartEndMarkers: false,
     penTool: false,
     penToolSpeed: 1,
-    showPenNib: true,
   });
 
   // Watermark Banner Config (Defaults restored from localStorage if previously saved)
@@ -487,26 +487,58 @@ export default function App() {
                 </button>
               </div>
 
+              {/* 2D Tur Hızlı Buton */}
+              <button
+                onClick={() => {
+                  if (viewerMethods?.toggle2DTour) {
+                    viewerMethods.toggle2DTour();
+                  } else {
+                    const is2DTouring = cameraState.isTouring && cameraState.tourMode === '2d';
+                    if (is2DTouring) {
+                      handleCameraChange({ isTouring: false });
+                    } else {
+                      handleCameraChange({ isTouring: true, tourMode: '2d', pitch: -89.9, viewMode: '2d' });
+                    }
+                  }
+                }}
+                className={`min-h-[32px] sm:min-h-[34px] px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition cursor-pointer shrink-0 ${
+                  cameraState.isTouring && cameraState.tourMode === '2d'
+                    ? 'bg-sky-500 text-slate-950 border-sky-400 animate-pulse font-black'
+                    : 'bg-slate-950/85 hover:bg-slate-900 border-white/15 text-sky-400 hover:border-sky-400/50'
+                }`}
+                title="2D Kuşbakışı Turu Başlat/Durdur (360° Dönen Düz Harita)"
+              >
+                <RotateCw className={`w-3.5 h-3.5 shrink-0 ${cameraState.isTouring && cameraState.tourMode === '2d' ? 'animate-spin' : ''}`} />
+                <span className="hidden lg:inline">
+                  {cameraState.isTouring && cameraState.tourMode === '2d' ? 'Durdur' : '2D Tur'}
+                </span>
+              </button>
+
               {/* 3D Tur Hızlı Buton */}
               <button
                 onClick={() => {
-                  const nextTouring = !cameraState.isTouring;
-                  if (nextTouring && cameraState.pitch < -65) {
-                    handleCameraChange({ isTouring: true, pitch: -38 });
+                  if (viewerMethods?.toggle3DTour) {
+                    viewerMethods.toggle3DTour();
                   } else {
-                    handleCameraChange({ isTouring: nextTouring });
+                    const is3DTouring = cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode);
+                    if (is3DTouring) {
+                      handleCameraChange({ isTouring: false });
+                    } else {
+                      const nextPitch = cameraState.pitch < -65 ? -38 : cameraState.pitch;
+                      handleCameraChange({ isTouring: true, tourMode: '3d', pitch: nextPitch, viewMode: '3d' });
+                    }
                   }
                 }}
-                className={`min-h-[32px] sm:min-h-[34px] px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition cursor-pointer shrink-0 ${
-                  cameraState.isTouring
-                    ? 'bg-red-500 text-white border-red-400 animate-pulse'
-                    : 'bg-slate-950/85 hover:bg-slate-900 border-white/15 text-sky-400 hover:border-sky-400/50'
+                className={`min-h-[32px] sm:min-h-[34px] px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-xl border shadow-xl transition cursor-pointer shrink-0 ${
+                  cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode)
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 animate-pulse font-black'
+                    : 'bg-slate-950/85 hover:bg-slate-900 border-white/15 text-amber-400 hover:border-amber-400/50'
                 }`}
-                title="3D Sinematik Turu Başlat/Durdur"
+                title="3D Perspektif Turu Başlat/Durdur"
               >
-                <Rotate3d className={`w-3.5 h-3.5 shrink-0 ${cameraState.isTouring ? 'animate-spin' : ''}`} />
-                <span className="hidden md:inline">
-                  {cameraState.isTouring ? 'Durdur' : '3D Tur'}
+                <Rotate3d className={`w-3.5 h-3.5 shrink-0 ${cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'animate-spin' : ''}`} />
+                <span className="hidden lg:inline">
+                  {cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'Durdur' : '3D Tur'}
                 </span>
               </button>
 
@@ -629,7 +661,11 @@ export default function App() {
         >
           {/* Watermark rendered INSIDE the Cesium container when watermark is enabled and only on base map screen */}
           {!showSplash && watermarkConfig.visible && (activeParcel || isParcelLoaded) && (
-            <WatermarkOverlay config={watermarkConfig} activeParcel={activeParcel} />
+            <WatermarkOverlay
+              config={watermarkConfig}
+              activeParcel={activeParcel}
+              onUpdateConfig={handleWatermarkChange}
+            />
           )}
         </CesiumViewer>
 

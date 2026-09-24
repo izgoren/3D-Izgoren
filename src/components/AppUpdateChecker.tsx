@@ -229,12 +229,24 @@ export const AppUpdateChecker: React.FC = () => {
                     <span><strong className="text-white">3D Arazi Akıllı Sınır Ortalama:</strong> Arazi kabartması açıldığında veya kapatıldığında kot farkı hesaplanarak sınırların otomatik ekrana sığdırılması.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
+                    <span className="text-cyan-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">2D Kuşbakışı Tur Özelliği (3D Tur Üzerinde):</strong> 3D Tur butonunun hemen üzerine eklenen 2D Tur butonu ile haritayı tam tepeden (kuşbakışı plan modunda) 360° döndürerek parselin tüm cephelerini ve kadastral yönlerini düz harita formunda izleyebilirsiniz.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-sky-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">İkon Çubuğunu & Filigran Etiketini Ekranda Kaydırma ve Büyütme:</strong> Sağdaki hızlı erişim ikon çubuğu ekranda istenilen yere serbestçe sürüklenebilir; filigran etiketi doğrudan ekranda taşınabilir, +/- butonlarıyla ve sağ alt köşesinden çekilerek serbestçe büyütülüp küçültülebilir.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">Gelişmiş Hızlı Erişim İkon Çubuğu:</strong> Çubuk başına Büyütme (+) ve Küçültme (-) zoom butonları; Konum altına sırasıyla HD Fotoğraf çekme, 3D Tur başlatma/durdurma ve 1080p Video Kayıt butonları eklendi.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
                     <span className="text-amber-400 font-bold shrink-0">✓</span>
                     <span><strong className="text-white">Cihaz Hız & 60 FPS Optimizasyonu:</strong> Telefon, Tablet ve PC donanımına göre dinamik 3D tur hızı, karo yükleme hassasiyeti ve 60Hz/90Hz/120Hz delta-time akıcılığı.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-cyan-400 font-bold shrink-0">✓</span>
-                    <span><strong className="text-white">Pen Tool KML Takip & Çizim Efekti:</strong> KML sınır çizgilerini seçili stil parametrelerine (renk, kalınlık, neon ışıma, kesikli çizgi) göre pürüzsüzce çizen ve takip eden 3D Pen Tool animasyonu.</span>
+                    <span><strong className="text-white">KML Çizim Animasyonu (Silerek Takip & Tamamlama):</strong> Sınırı ekranda sıfırdan silinmiş başlatıp KML koordinatlarını seçili stil ayarlarına (renk, kalınlık, neon ışıma, kesikli çizgi) göre adım adım çizer; çizim bitince tüm sınırı ve parsel alanını eksiksiz tamamlar.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-rose-400 font-bold shrink-0">✓</span>

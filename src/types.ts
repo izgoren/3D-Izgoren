@@ -8,6 +8,7 @@ export interface CameraState {
   range: number; // in meters, 100-5000
   tourSpeed: number; // speed multiplier, e.g. 0.3
   isTouring: boolean;
+  tourMode?: '2d' | '3d'; // 2D Kuşbakışı Tur veya 3D Perspektif Tur
   elevation: number; // calculated altitude above ground
   viewMode?: '2d' | '3d'; // 2D Kuşbakışı veya 3D Perspektif Modu
 }
@@ -42,9 +43,8 @@ export interface ParcelStyle {
   dashedBorder: boolean;
   glowEffect: boolean;
   showStartEndMarkers: boolean;
-  penTool: boolean; // Pen tool KML sınır takip ve çizim animasyonu
+  penTool: boolean; // KML sınırını silerek takip eden ve bitince tamamlayan çizim animasyonu
   penToolSpeed?: number; // 0.5x, 1x, 2x
-  showPenNib?: boolean; // Kalem ucu imlecini göster
 }
 
 export interface WatermarkConfig {
@@ -58,9 +58,10 @@ export interface WatermarkConfig {
   position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'bottom-center' | 'top-center';
   adaParselPosition: 'inside' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   opacity: number; // 0.1 to 1.0
-  scale?: number; // 0.5 to 2.0 (1.0 = 100% standard size)
+  scale?: number; // 0.4 to 2.5 (1.0 = 100% standard size)
   showLocationBadge: boolean;
   badgeStyle: 'glass' | 'solid' | 'minimal';
+  customPosition?: { xRatio: number; yRatio: number } | null; // Ekranda serbestçe sürüklenmiş oranlı konum (0 to 1)
 }
 
 export interface RecordingStatus {

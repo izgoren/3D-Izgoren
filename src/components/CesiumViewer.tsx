@@ -17,6 +17,14 @@ import {
   Sparkles,
   Compass,
   PenTool,
+  Plus,
+  Minus,
+  Camera,
+  Rotate3d,
+  RotateCw,
+  Video,
+  Square,
+  GripVertical,
 } from 'lucide-react';
 import {
   getDeviceOptimizationProfile,
@@ -51,6 +59,12 @@ export interface ViewerMethods {
   resetToNorth?: () => void;
   set2DView: () => void;
   set3DView: () => void;
+  zoomIn?: () => void;
+  zoomOut?: () => void;
+  toggleTour?: () => void;
+  toggle2DTour?: () => void;
+  toggle3DTour?: () => void;
+  toggleVideoRecording?: () => void;
 }
 
 // 2D Canvas Watermark Renderer for Video & Snapshot (Proportionally scaled to recording dimensions)
@@ -78,32 +92,39 @@ function renderWatermarkToCanvas(
   let cardX = width - cardW - margin;
   let cardY = height - cardH - margin;
 
-  switch (config.position) {
-    case 'bottom-left':
-      cardX = margin;
-      cardY = height - cardH - margin;
-      break;
-    case 'bottom-center':
-      cardX = (width - cardW) / 2;
-      cardY = height - cardH - margin;
-      break;
-    case 'top-left':
-      cardX = margin;
-      cardY = margin;
-      break;
-    case 'top-right':
-      cardX = width - cardW - margin;
-      cardY = margin;
-      break;
-    case 'top-center':
-      cardX = (width - cardW) / 2;
-      cardY = margin;
-      break;
-    case 'bottom-right':
-    default:
-      cardX = width - cardW - margin;
-      cardY = height - cardH - margin;
-      break;
+  if (config.customPosition && typeof config.customPosition.xRatio === 'number') {
+    const maxAvailW = Math.max(1, width - cardW - margin * 2);
+    const maxAvailH = Math.max(1, height - cardH - margin * 2);
+    cardX = margin + config.customPosition.xRatio * maxAvailW;
+    cardY = margin + config.customPosition.yRatio * maxAvailH;
+  } else {
+    switch (config.position) {
+      case 'bottom-left':
+        cardX = margin;
+        cardY = height - cardH - margin;
+        break;
+      case 'bottom-center':
+        cardX = (width - cardW) / 2;
+        cardY = height - cardH - margin;
+        break;
+      case 'top-left':
+        cardX = margin;
+        cardY = margin;
+        break;
+      case 'top-right':
+        cardX = width - cardW - margin;
+        cardY = margin;
+        break;
+      case 'top-center':
+        cardX = (width - cardW) / 2;
+        cardY = margin;
+        break;
+      case 'bottom-right':
+      default:
+        cardX = width - cardW - margin;
+        cardY = height - cardH - margin;
+        break;
+    }
   }
 
   // Location display string
@@ -396,6 +417,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const isTouringRef = useRef<boolean>(cameraState.isTouring);
+  const tourModeRef = useRef<'2d' | '3d'>(cameraState.tourMode || '3d');
   const tourSpeedRef = useRef<number>(cameraState.tourSpeed);
   const headingRef = useRef<number>(cameraState.heading);
   const pitchRef = useRef<number>(cameraState.pitch);
@@ -416,6 +438,9 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
   useEffect(() => {
     isPenToolRef.current = !!parcelStyle.penTool;
+    if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+      viewerRef.current.scene.requestRender();
+    }
   }, [parcelStyle.penTool]);
 
   useEffect(() => {
@@ -542,11 +567,18 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   // Sync refs
   useEffect(() => {
     isTouringRef.current = cameraState.isTouring;
+    tourModeRef.current = cameraState.tourMode || '3d';
     if (cameraState.isTouring) {
-      // If entering 3D tour from top-down (-90° / Kuşbakışı), smoothly tilt to a 3D perspective angle (-38°)
-      if (pitchRef.current < -65) {
-        pitchRef.current = -38;
-        onCameraChangeRef.current({ pitch: -38 });
+      if (cameraState.tourMode === '2d') {
+        // 2D Kuşbakışı Tur: Tam tepeden bakış açısı (-89.9° Cesium gimbal lock önler)
+        pitchRef.current = -89.9;
+        onCameraChangeRef.current({ pitch: -89.9, viewMode: '2d' });
+      } else {
+        // 3D Perspektif Tur: Eğer kuşbakışındaysa perspektif açısına (-38°) eğ
+        if (pitchRef.current < -65) {
+          pitchRef.current = -38;
+          onCameraChangeRef.current({ pitch: -38, viewMode: '3d' });
+        }
       }
       updateCameraView();
       if (viewerRef.current && !viewerRef.current.isDestroyed()) {
@@ -563,7 +595,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }, 60);
       }
     }
-  }, [cameraState.isTouring, updateCameraView]);
+  }, [cameraState.isTouring, cameraState.tourMode, updateCameraView]);
 
   useEffect(() => {
     tourSpeedRef.current = cameraState.tourSpeed;
@@ -938,9 +970,13 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               const nextHeading = (headingRef.current + headingStep) % 360;
               headingRef.current = nextHeading;
 
-              // Ensure 3D tour orbits from perspective angle, not degenerate -90
-              if (pitchRef.current < -65) {
-                pitchRef.current = -38;
+              // 2D veya 3D Tur moduna göre pitch açısını koru
+              if (tourModeRef.current === '2d') {
+                pitchRef.current = -89.9;
+              } else {
+                if (pitchRef.current < -65) {
+                  pitchRef.current = -38;
+                }
               }
 
               updateCameraView();
@@ -1134,10 +1170,139 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       const isExtruded = (parcelStyle.extrusionHeight || 0) > 0;
       const createdEntities: any[] = [];
 
+      // Parsel merkezini ve arazi taban yüksekliğini tespit et
+      let sumLng = 0;
+      let sumLat = 0;
+      coords.forEach((c) => {
+        sumLng += c.lng;
+        sumLat += c.lat;
+      });
+      const centerLng = sumLng / coords.length;
+      const centerLat = sumLat / coords.length;
+
+      let defaultTerrainHeight = 0;
+      if (viewer.scene.globe) {
+        const centerCarto = Cesium.Cartographic.fromDegrees(centerLng, centerLat);
+        const gh = viewer.scene.globe.getHeight(centerCarto);
+        if (typeof gh === 'number' && !isNaN(gh) && gh > -200) {
+          defaultTerrainHeight = gh;
+        }
+      }
+
+      const getCoordElevation = (lng: number, lat: number, directAlt?: number) => {
+        if (typeof directAlt === 'number' && directAlt > 0) return directAlt;
+        if (viewer.scene.globe) {
+          const carto = Cesium.Cartographic.fromDegrees(lng, lat);
+          const gh = viewer.scene.globe.getHeight(carto);
+          if (typeof gh === 'number' && !isNaN(gh) && gh > -200) {
+            return gh;
+          }
+        }
+        return defaultTerrainHeight;
+      };
+
+      // Animasyonlu çizginin zeminle çakışmaması (z-fighting olmaması) için kot ekle
+      const lineAltOffset = isExtruded ? (parcelStyle.extrusionHeight || 0) + 1.2 : 2.0;
+
+      // Her köşe noktasının gerçek 3D koordinatı (arazi üstü)
+      const elevatedPoints: any[] = coords.map((c) => {
+        const alt = getCoordElevation(c.lng, c.lat, c.alt);
+        return Cesium.Cartesian3.fromDegrees(c.lng, c.lat, alt + lineAltOffset);
+      });
+
+      const closedElevatedPoints = [...elevatedPoints];
+      if (coords.length >= 3) {
+        const first = coords[0];
+        const last = coords[coords.length - 1];
+        if (Math.abs(first.lng - last.lng) > 1e-6 || Math.abs(first.lat - last.lat) > 1e-6) {
+          closedElevatedPoints.push(elevatedPoints[0]);
+        }
+      }
+
+      // Pen Tool KML Çevre ve Mesafe Hesaplamaları
+      const distances: number[] = [0];
+      let totalPerimeter = 0;
+      for (let i = 0; i < closedElevatedPoints.length - 1; i++) {
+        const d = Cesium.Cartesian3.distance(closedElevatedPoints[i], closedElevatedPoints[i + 1]);
+        totalPerimeter += d;
+        distances.push(totalPerimeter);
+      }
+      if (totalPerimeter <= 0) totalPerimeter = 1;
+
+      const speedMultiplier = Math.max(0.2, parcelStyle.penToolSpeed || 1.0);
+      // Çizim süresi ~4.0 saniye / hız çarpanı, çizim bitince sınırı tamamlama ve hold süresi ~2.0 saniye
+      const drawDurationMs = 4000 / speedMultiplier;
+      const completeHoldMs = 2000 / speedMultiplier;
+      const totalCycleMs = drawDurationMs + completeHoldMs;
+
+      // Cesium'da GroundPolyline (clampToGround: true), dinamik CallbackProperty, PolylineGlowMaterialProperty ve PolylineDashMaterialProperty DESTEKLEMEZ.
+      // Bu nedenle animasyonlu, ışıltılı (neon) veya kesikli çizgiler elevatedPoints ile clampToGround: false olarak çizilir.
+      const isDynamicOrStyled = parcelStyle.penTool || parcelStyle.glowEffect || parcelStyle.dashedBorder || isExtruded;
+      const shouldClampPolyline = !isDynamicOrStyled;
+
+      // Dinamik Sınır Çizgisi: Sınırı silerek takip eder, adım adım çizer ve bitince sınırı tamamlar
+      let polylinePositions: any;
+      if (parcelStyle.penTool && closedElevatedPoints.length >= 2) {
+        polylinePositions = new Cesium.CallbackProperty(() => {
+          const now = Date.now();
+          const elapsed = now % totalCycleMs;
+
+          // Çizim tamamlandıysa ("bitince sınırı tamamla"): Tam kapalı KML sınırını göster
+          if (elapsed >= drawDurationMs) {
+            return closedElevatedPoints;
+          }
+
+          // Çizim aşaması ("silerek takip et"): Sınır sıfırdan başlar, KML koordinatlarını takip ederek çizer
+          const progress = Math.max(0.0001, Math.min(0.9999, elapsed / drawDurationMs));
+          const currentTargetDist = progress * totalPerimeter;
+
+          const pts: any[] = [];
+          for (let i = 0; i < distances.length - 1; i++) {
+            pts.push(closedElevatedPoints[i]);
+            if (currentTargetDist <= distances[i + 1]) {
+              const d0 = distances[i];
+              const d1 = distances[i + 1];
+              const segLen = d1 - d0;
+              const t = segLen > 1e-6 ? (currentTargetDist - d0) / segLen : 0;
+              const tip = Cesium.Cartesian3.lerp(
+                closedElevatedPoints[i],
+                closedElevatedPoints[i + 1],
+                t,
+                new Cesium.Cartesian3()
+              );
+              pts.push(tip);
+              break;
+            }
+          }
+
+          // Cesium polyline en az 2 nokta gerektirir
+          if (pts.length < 2) {
+            pts.push(pts[0] || closedElevatedPoints[0]);
+          }
+          return pts;
+        }, false);
+      } else {
+        polylinePositions = shouldClampPolyline ? closedPoints : closedElevatedPoints;
+      }
+
+      // Dinamik Poligon Dolgusu: Pen Tool aktifken çizim bitene kadar şeffaftır, sınır tamamlanınca görünür
+      let polygonMaterial: any = fillCesiumColor;
+      if (parcelStyle.penTool && closedPoints.length >= 2) {
+        polygonMaterial = new Cesium.ColorMaterialProperty(
+          new Cesium.CallbackProperty(() => {
+            const elapsed = Date.now() % totalCycleMs;
+            if (elapsed >= drawDurationMs) {
+              return fillCesiumColor;
+            }
+            return Cesium.Color.TRANSPARENT;
+          }, false)
+        );
+      }
+
       // 1. Base 3D Polygon
       const polygonConfig: any = {
         hierarchy: new Cesium.PolygonHierarchy(closedPoints),
-        material: fillCesiumColor,
+        material: polygonMaterial,
       };
 
       if (isExtruded) {
@@ -1158,29 +1323,29 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       });
       createdEntities.push(mainPolygonEntity);
 
-      // 2. Base Polyline (Outline / Border)
-      let polylineMaterial: any = borderCesiumColor;
-      let shouldClampPolyline = !isExtruded;
+      // 2. Base Polyline (Outline / Border - Stil ayarlarına göre takip eder ve çizer)
+      let polylineMaterial: any;
 
       if (parcelStyle.dashedBorder) {
         polylineMaterial = new Cesium.PolylineDashMaterialProperty({
           color: borderCesiumColor,
-          gapColor: Cesium.Color.BLACK.withAlpha(0.2),
+          gapColor: Cesium.Color.TRANSPARENT,
           dashLength: 20.0,
         });
-        // Cesium GroundPolyline does not support PolylineDashMaterialProperty, so clampToGround must be false
-        shouldClampPolyline = false;
       } else if (parcelStyle.glowEffect) {
         polylineMaterial = new Cesium.PolylineGlowMaterialProperty({
-          glowPower: 0.3,
+          glowPower: 0.35,
+          taperPower: 1.0,
           color: borderCesiumColor,
         });
+      } else {
+        polylineMaterial = new Cesium.ColorMaterialProperty(borderCesiumColor);
       }
 
       const mainPolylineEntity = viewer.entities.add({
         name: `${activeParcel.name || 'Parsel'} - Sınır`,
         polyline: {
-          positions: closedPoints,
+          positions: polylinePositions,
           width: Math.max(1, parcelStyle.borderWidth || 4),
           material: polylineMaterial,
           clampToGround: shouldClampPolyline,
@@ -1188,143 +1353,19 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       });
       createdEntities.push(mainPolylineEntity);
 
-      // 3. Pen Tool (KML Çizgilerini Stil Ayarlarına Göre Takip Eden Çizim Efekti)
-      if (parcelStyle.penTool && closedPoints.length >= 2) {
-        // Parsel çevre uzunluğu ve her köşe arasındaki kümülatif mesafe hesaplaması
-        const distances: number[] = [0];
-        let totalPerimeter = 0;
-        for (let i = 0; i < closedPoints.length - 1; i++) {
-          const d = Cesium.Cartesian3.distance(closedPoints[i], closedPoints[i + 1]);
-          totalPerimeter += d;
-          distances.push(totalPerimeter);
-        }
-        if (totalPerimeter <= 0) totalPerimeter = 1;
-
-        // Çevre hattı üzerinde herhangi bir mesafedeki Cartesian3 koordinatını pürüzsüz interpolasyon ile hesapla
-        const getPointAtPerimeterDist = (targetDist: number) => {
-          const d = ((targetDist % totalPerimeter) + totalPerimeter) % totalPerimeter;
-          let segIdx = 0;
-          for (let i = 0; i < distances.length - 1; i++) {
-            if (d <= distances[i + 1]) {
-              segIdx = i;
-              break;
-            }
-          }
-          const d0 = distances[segIdx];
-          const d1 = distances[segIdx + 1];
-          const segLen = d1 - d0;
-          const t = segLen > 1e-6 ? (d - d0) / segLen : 0;
-          return Cesium.Cartesian3.lerp(closedPoints[segIdx], closedPoints[segIdx + 1], t, new Cesium.Cartesian3());
-        };
-
-        const speedMultiplier = Math.max(0.2, parcelStyle.penToolSpeed || 1.0);
-        // 1 tam tur süresi ~5.5 saniye (hız ayarına göre dinamik)
-        const cycleDurationMs = 5500 / speedMultiplier;
-
-        // A) Kalem Ucu İmleci (3D Pen Tool Cursor & Çizim Ucu)
-        if (parcelStyle.showPenNib !== false) {
-          // 1) Parlak çizim iğnesi / kalem ucu
-          const penNibEntity = viewer.entities.add({
-            name: `${activeParcel.name || 'Parsel'} - Pen Tool Kalem Ucu`,
-            position: new Cesium.CallbackProperty(() => {
-              const progress = ((Date.now() % cycleDurationMs) / cycleDurationMs);
-              return getPointAtPerimeterDist(progress * totalPerimeter);
-            }, false),
-            point: {
-              pixelSize: Math.max(6, (parcelStyle.borderWidth || 4) + 4),
-              color: Cesium.Color.WHITE,
-              outlineColor: borderCesiumColor,
-              outlineWidth: 2.5,
-              heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-            label: {
-              text: '✒️ PEN TOOL',
-              font: 'bold 9px "JetBrains Mono", Consolas, monospace',
-              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-              fillColor: Cesium.Color.WHITE,
-              outlineColor: Cesium.Color.BLACK,
-              outlineWidth: 3,
-              backgroundColor: Cesium.Color.fromCssColorString('#020617').withAlpha(0.85),
-              showBackground: true,
-              backgroundPadding: new Cesium.Cartesian2(6, 3),
-              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-              pixelOffset: new Cesium.Cartesian2(0, -14),
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              scale: 1.0,
-            },
-          });
-          createdEntities.push(penNibEntity);
-
-          // 2) Kalem ucunun çizim aurası (Hafif nabız yapan parlak çizim kıvılcımı)
-          const penAuraEntity = viewer.entities.add({
-            name: `${activeParcel.name || 'Parsel'} - Pen Tool Çizim Kıvılcımı`,
-            position: new Cesium.CallbackProperty(() => {
-              const progress = ((Date.now() % cycleDurationMs) / cycleDurationMs);
-              return getPointAtPerimeterDist(progress * totalPerimeter);
-            }, false),
-            point: {
-              pixelSize: new Cesium.CallbackProperty(() => {
-                return (parcelStyle.borderWidth || 4) + 12 + 4 * Math.sin(Date.now() / 120);
-              }, false),
-              color: borderCesiumColor.withAlpha(0.35),
-              outlineColor: borderCesiumColor.withAlpha(0.8),
-              outlineWidth: 1.5,
-              heightReference: !isExtruded ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-          });
-          createdEntities.push(penAuraEntity);
-        }
-
-        // B) Stil Ayarlarına Göre KML Çizgilerini Takip Eden Dinamik Çizim İzi (Dynamic Pen Stroke)
-        // Pen Tool'un takip ettiği KML çizgisi, parsel stilindeki renge, kalınlığa, neon glow veya kesikli çizgiye tam sadık kalır
-        let penStrokeMaterial: any;
-        if (parcelStyle.dashedBorder) {
-          penStrokeMaterial = new Cesium.PolylineDashMaterialProperty({
-            color: borderCesiumColor,
-            gapColor: Cesium.Color.WHITE.withAlpha(0.3),
-            dashLength: 16.0,
-          });
-        } else if (parcelStyle.glowEffect) {
-          penStrokeMaterial = new Cesium.PolylineGlowMaterialProperty({
-            glowPower: new Cesium.CallbackProperty(() => {
-              return 0.4 + 0.2 * Math.sin(Date.now() / 160);
-            }, false),
-            taperPower: 0.5,
-            color: borderCesiumColor,
-          });
-        } else {
-          penStrokeMaterial = borderCesiumColor;
-        }
-
-        const penTrackStrokeEntity = viewer.entities.add({
-          name: `${activeParcel.name || 'Parsel'} - Pen Tool Takip Çizgisi`,
-          polyline: {
-            positions: closedPoints,
-            width: new Cesium.CallbackProperty(() => {
-              // Çizgi kalınlığı stil ayarıyla senkronize, hafif nabız ile çizim canlılığı verir
-              return Math.max(2, (parcelStyle.borderWidth || 4) + 2 + 1.0 * Math.sin(Date.now() / 180));
-            }, false),
-            material: penStrokeMaterial,
-            clampToGround: !isExtruded && !parcelStyle.dashedBorder,
-          },
-        });
-        createdEntities.push(penTrackStrokeEntity);
-      }
-
       // 4. Köşe Noktaları (Köşe Başlangıç / Bitiş Noktaları)
       if (parcelStyle.showStartEndMarkers && coords.length > 0) {
         coords.forEach((coord, idx) => {
+          const elev = getCoordElevation(coord.lng, coord.lat, coord.alt);
           const ptEntity = viewer.entities.add({
             name: `Köşe Noktası ${idx + 1}`,
-            position: Cesium.Cartesian3.fromDegrees(coord.lng, coord.lat, (coord.alt || 0) + 1),
+            position: Cesium.Cartesian3.fromDegrees(coord.lng, coord.lat, elev + lineAltOffset + 0.3),
             point: {
-              pixelSize: 8,
+              pixelSize: Math.max(6, (parcelStyle.borderWidth || 4) + 3),
               color: borderCesiumColor,
               outlineColor: Cesium.Color.WHITE,
               outlineWidth: 2,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
             },
           });
           createdEntities.push(ptEntity);
@@ -1792,6 +1833,156 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [updateUserLocationMarker]);
 
+  // Kamera Yakınlaştırma (Büyütme +)
+  const handleZoomIn = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
+
+    if (isTouringRef.current) {
+      const nextRange = Math.max(80, rangeRef.current * 0.75);
+      rangeRef.current = nextRange;
+      onCameraChangeRef.current({ range: nextRange });
+      updateCameraView();
+      return;
+    }
+
+    try {
+      const height = viewer.camera.positionCartographic?.height || rangeRef.current || 1000;
+      const moveAmount = Math.max(30, height * 0.35);
+      viewer.camera.zoomIn(moveAmount);
+      const newHeight = viewer.camera.positionCartographic?.height || Math.max(50, height - moveAmount);
+      rangeRef.current = newHeight;
+      onCameraChangeRef.current({ range: newHeight });
+      viewer.scene.requestRender();
+    } catch (e) {
+      console.warn('ZoomIn error:', e);
+    }
+  }, [updateCameraView]);
+
+  // Kamera Uzaklaştırma (Küçültme -)
+  const handleZoomOut = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
+
+    if (isTouringRef.current) {
+      const nextRange = Math.min(50000, rangeRef.current * 1.35);
+      rangeRef.current = nextRange;
+      onCameraChangeRef.current({ range: nextRange });
+      updateCameraView();
+      return;
+    }
+
+    try {
+      const height = viewer.camera.positionCartographic?.height || rangeRef.current || 1000;
+      const moveAmount = Math.max(40, height * 0.45);
+      viewer.camera.zoomOut(moveAmount);
+      const newHeight = viewer.camera.positionCartographic?.height || (height + moveAmount);
+      rangeRef.current = newHeight;
+      onCameraChangeRef.current({ range: newHeight });
+      viewer.scene.requestRender();
+    } catch (e) {
+      console.warn('ZoomOut error:', e);
+    }
+  }, [updateCameraView]);
+
+  // 2D Kuşbakışı Tur Başlat / Durdur
+  const toggle2DTour = useCallback(() => {
+    const isCurrently2DTouring = cameraState.isTouring && cameraState.tourMode === '2d';
+    if (isCurrently2DTouring) {
+      onCameraChangeRef.current({ isTouring: false });
+    } else {
+      onCameraChangeRef.current({
+        isTouring: true,
+        tourMode: '2d',
+        pitch: -89.9,
+        viewMode: '2d',
+      });
+    }
+  }, [cameraState.isTouring, cameraState.tourMode]);
+
+  // 3D Perspektif Tur Başlat / Durdur
+  const toggle3DTour = useCallback(() => {
+    const isCurrently3DTouring = cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode);
+    if (isCurrently3DTouring) {
+      onCameraChangeRef.current({ isTouring: false });
+    } else {
+      const nextPitch = cameraState.pitch < -65 ? -38 : cameraState.pitch;
+      onCameraChangeRef.current({
+        isTouring: true,
+        tourMode: '3d',
+        pitch: nextPitch,
+        viewMode: '3d',
+      });
+    }
+  }, [cameraState.isTouring, cameraState.tourMode, cameraState.pitch]);
+
+  // 1080p Video Kaydı Başlat / Durdur
+  const toggleVideoRecording = useCallback(async () => {
+    if (isRecording) {
+      stopVideoRecording();
+    } else {
+      await startVideoRecording();
+    }
+  }, [isRecording, startVideoRecording, stopVideoRecording]);
+
+  // Ekrandaki Hızlı Erişim İkon Çubuğu Serbestçe Sürükleme (Kaydırma) Durumu
+  const [iconBarPos, setIconBarPos] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingBarRef = useRef<boolean>(false);
+  const dragBarStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number }>({
+    clientX: 0,
+    clientY: 0,
+    startX: 0,
+    startY: 0,
+  });
+  const iconBarRef = useRef<HTMLDivElement>(null);
+
+  const handleBarPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = iconBarRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    isDraggingBarRef.current = true;
+    dragBarStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: rect.left,
+      startY: rect.top,
+    };
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  }, []);
+
+  const handleBarPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingBarRef.current) return;
+    const dx = e.clientX - dragBarStartRef.current.clientX;
+    const dy = e.clientY - dragBarStartRef.current.clientY;
+
+    const el = iconBarRef.current;
+    const barW = el ? el.offsetWidth : 48;
+    const barH = el ? el.offsetHeight : 420;
+
+    const minX = 8;
+    const maxX = Math.max(8, window.innerWidth - barW - 8);
+    const minY = 8;
+    const maxY = Math.max(8, window.innerHeight - barH - 8);
+
+    const newX = Math.min(maxX, Math.max(minX, dragBarStartRef.current.startX + dx));
+    const newY = Math.min(maxY, Math.max(minY, dragBarStartRef.current.startY + dy));
+
+    setIconBarPos({ x: newX, y: newY });
+  }, []);
+
+  const handleBarPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDraggingBarRef.current) {
+      isDraggingBarRef.current = false;
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  }, []);
+
   // Expose Viewer methods to parent
   useEffect(() => {
     if (onViewerReady) {
@@ -1805,6 +1996,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         resetToNorth,
         set2DView,
         set3DView,
+        zoomIn: handleZoomIn,
+        zoomOut: handleZoomOut,
+        toggleTour: toggle3DTour,
+        toggle2DTour,
+        toggle3DTour,
+        toggleVideoRecording,
       });
     }
   }, [
@@ -1818,6 +2015,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     resetToNorth,
     set2DView,
     set3DView,
+    handleZoomIn,
+    handleZoomOut,
+    toggle2DTour,
+    toggle3DTour,
+    toggleVideoRecording,
   ]);
 
   // Responsive device checks
@@ -1966,9 +2168,78 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           </div>
         )}
 
-        {/* Ekran Sağı Dikey Çubuk: 2D / 3D / 3D Arazi / Sınırları Ortala / GPS Konum - Ekrana oranla küçültülmüş & sadece altlık harita ekranında gösterilir */}
+        {/* Ekran Sağı Dikey Çubuk: Büyüt/Küçült, 2D/3D, Ortala, Kuzey, Konum, HD Fotoğraf, 3D Tur, Kayıt */}
         {showMapControls && (
-          <div className="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none scale-75 sm:scale-85 md:scale-90 lg:scale-100 origin-right transition-all">
+          <div
+            ref={iconBarRef}
+            style={
+              iconBarPos
+                ? {
+                    left: `${iconBarPos.x}px`,
+                    top: `${iconBarPos.y}px`,
+                    transform: 'none',
+                    right: 'auto',
+                    bottom: 'auto',
+                  }
+                : undefined
+            }
+            className={`absolute z-30 flex flex-col items-center gap-1 sm:gap-1.5 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none scale-75 sm:scale-85 md:scale-90 lg:scale-100 transition-all max-h-[95vh] overflow-y-auto scrollbar-none ${
+              iconBarPos ? '' : 'right-1.5 sm:right-3 top-1/2 -translate-y-1/2 origin-right'
+            }`}
+          >
+            {/* 0. İkon Çubuğu Sürükleme (Kaydırma) Tutamacı */}
+            <div
+              onPointerDown={handleBarPointerDown}
+              onPointerMove={handleBarPointerMove}
+              onPointerUp={handleBarPointerUp}
+              onPointerCancel={handleBarPointerUp}
+              onDoubleClick={() => setIconBarPos(null)}
+              className="flex items-center justify-center w-full py-1 rounded bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white cursor-grab active:cursor-grabbing transition-colors"
+              title="İkon Çubuğunu Ekranda İstediğin Yere Kaydır & Taşı (Çift tıkla sıfırla)"
+            >
+              <GripVertical className="w-3.5 h-3.5 text-sky-400" />
+            </div>
+
+            {iconBarPos && (
+              <button
+                type="button"
+                onClick={() => setIconBarPos(null)}
+                className="w-full py-0.5 flex items-center justify-center text-[7px] font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded transition cursor-pointer"
+                title="İkon Çubuğunu Sağ Kenara Sıfırla"
+              >
+                SIFIRLA
+              </button>
+            )}
+
+            {/* 1. Büyütme (+) Butonu */}
+            <button
+              id="btn-floating-zoom-in"
+              onClick={handleZoomIn}
+              className="group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg bg-white/5 hover:bg-sky-500/20 active:bg-sky-500/30 border border-white/10 hover:border-sky-400/60 text-slate-200 hover:text-sky-300 transition-all duration-200 active:scale-95 cursor-pointer"
+              title="Haritayı Yakınlaştır (Büyüt +)"
+            >
+              <Plus className="w-3.5 h-3.5 text-sky-400 group-hover:scale-125 transition duration-200" />
+              <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
+                BÜYÜT
+              </span>
+            </button>
+
+            {/* 2. Küçültme (-) Butonu */}
+            <button
+              id="btn-floating-zoom-out"
+              onClick={handleZoomOut}
+              className="group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg bg-white/5 hover:bg-sky-500/20 active:bg-sky-500/30 border border-white/10 hover:border-sky-400/60 text-slate-200 hover:text-sky-300 transition-all duration-200 active:scale-95 cursor-pointer"
+              title="Haritayı Uzaklaştır (Küçült -)"
+            >
+              <Minus className="w-3.5 h-3.5 text-sky-400 group-hover:scale-125 transition duration-200" />
+              <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
+                KÜÇÜLT
+              </span>
+            </button>
+
+            {/* Dikey Ayırıcı Çizgi */}
+            <div className="w-5 h-px bg-white/10 my-0.5" />
+
             {/* 2D Kuşbakışı Düz Harita Butonu (Sınırları Ekrana Tam Ortalar) */}
             <button
               id="btn-view-2d-mode"
@@ -2059,6 +2330,96 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               </div>
               <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-sky-300 tracking-tight leading-tight">
                 KONUM
+              </span>
+            </button>
+
+            {/* Dikey Ayırıcı Çizgi */}
+            <div className="w-5 h-px bg-white/10 my-0.5" />
+
+            {/* 1. HD Fotoğraf Butonu (Konum Altı - 1. Sıra) */}
+            <button
+              id="btn-floating-snapshot"
+              onClick={takeSnapshot}
+              className="group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg bg-white/5 hover:bg-emerald-500/20 active:bg-emerald-500/30 border border-white/10 hover:border-emerald-400/60 text-slate-200 hover:text-emerald-300 transition-all duration-200 active:scale-95 cursor-pointer"
+              title="HD Fotoğraf Çek (1080p Ekran Görüntüsü İndir)"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition duration-200" />
+              <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-emerald-300 tracking-tight leading-tight">
+                HD FOTO
+              </span>
+            </button>
+
+            {/* 2. 2D Tur Butonu (3D Tur Üzerinde - 360° Dönen Düz Harita) */}
+            <button
+              id="btn-floating-2d-tour"
+              onClick={toggle2DTour}
+              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
+                cameraState.isTouring && cameraState.tourMode === '2d'
+                  ? 'bg-sky-500/30 border-sky-400 text-sky-200 shadow-md shadow-sky-500/30 ring-1 ring-sky-400/50'
+                  : 'bg-white/5 border-white/10 text-slate-200 hover:bg-sky-500/20 hover:border-sky-400/60 hover:text-sky-300'
+              }`}
+              title={
+                cameraState.isTouring && cameraState.tourMode === '2d'
+                  ? '2D Kuşbakışı Turu Durdur'
+                  : '2D Kuşbakışı Parsel Turunu Başlat (360° Dönen Düz Harita)'
+              }
+            >
+              <RotateCw
+                className={`w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition duration-200 ${
+                  cameraState.isTouring && cameraState.tourMode === '2d' ? 'animate-spin' : ''
+                }`}
+              />
+              <span className="text-[8px] font-bold mt-0.5 tracking-tight leading-tight">
+                {cameraState.isTouring && cameraState.tourMode === '2d' ? 'DURDUR' : '2D TUR'}
+              </span>
+            </button>
+
+            {/* 3. 3D Tur Butonu (Konum Altı - 3. Sıra) */}
+            <button
+              id="btn-floating-3d-tour"
+              onClick={toggle3DTour}
+              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
+                cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode)
+                  ? 'bg-amber-500/30 border-amber-400 text-amber-200 shadow-md shadow-amber-500/30 ring-1 ring-amber-400/50'
+                  : 'bg-white/5 border-white/10 text-slate-200 hover:bg-amber-500/20 hover:border-amber-400/60 hover:text-amber-300'
+              }`}
+              title={
+                cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode)
+                  ? '3D Perspektif Turu Durdur'
+                  : '3D Perspektif Parsel Turunu Başlat'
+              }
+            >
+              <Rotate3d
+                className={`w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition duration-200 ${
+                  cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'animate-spin' : ''
+                }`}
+              />
+              <span className="text-[8px] font-bold mt-0.5 tracking-tight leading-tight">
+                {cameraState.isTouring && (cameraState.tourMode === '3d' || !cameraState.tourMode) ? 'DURDUR' : '3D TUR'}
+              </span>
+            </button>
+
+            {/* 4. 1080p Video Kaydı Butonu (Konum Altı - 4. Sıra) */}
+            <button
+              id="btn-floating-record"
+              onClick={toggleVideoRecording}
+              className={`group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg border transition-all duration-200 active:scale-95 cursor-pointer ${
+                isRecording
+                  ? 'bg-rose-600/40 border-rose-500 text-rose-200 shadow-lg shadow-rose-600/30 ring-1 ring-rose-400 animate-pulse'
+                  : 'bg-white/5 border-white/10 text-slate-200 hover:bg-rose-500/20 hover:border-rose-400/60 hover:text-rose-300'
+              }`}
+              title={isRecording ? 'Video Kaydını Durdur ve MP4 İndir' : '1080p Full HD Video Kaydını Başlat'}
+            >
+              {isRecording ? (
+                <div className="relative flex items-center justify-center">
+                  <span className="absolute -inset-1 rounded-full bg-rose-500 animate-ping opacity-75" />
+                  <Square className="w-3.5 h-3.5 text-rose-400 fill-rose-400 relative z-10" />
+                </div>
+              ) : (
+                <Video className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition duration-200" />
+              )}
+              <span className="text-[8px] font-bold mt-0.5 tracking-tight leading-tight">
+                {isRecording ? 'DURDUR' : 'KAYIT'}
               </span>
             </button>
           </div>
