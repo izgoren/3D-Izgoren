@@ -25,11 +25,15 @@ import {
   Video,
   Square,
   GripVertical,
+  ChevronLeft,
+  ChevronRight,
+  Scaling,
 } from 'lucide-react';
 import {
   getDeviceOptimizationProfile,
   DeviceOptimizationProfile,
 } from '../utils/deviceOptimizer';
+import { loadIconBarPrefs, saveIconBarPrefs } from '../utils/settingsStorage';
 
 declare const Cesium: any;
 
@@ -965,30 +969,40 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             if (parcelCenterRef.current) {
               const currentProf = deviceProfileRef.current;
               const baseSpeed = tourSpeedRef.current || currentProf.tourSpeed;
-              // 60 FPS referanslı delta-time adımı: 60Hz, 90Hz ve 120Hz ekranlarda kasıntısız sabit hız
-              const headingStep = baseSpeed * (dt * 60);
-              const nextHeading = (headingRef.current + headingStep) % 360;
-              headingRef.current = nextHeading;
 
-              // 2D veya 3D Tur moduna göre pitch açısını koru
+              // 2D veya 3D Tur Ayrımı:
               if (tourModeRef.current === '2d') {
+                // 2D Kuşbakışı Tur:
+                // Kullanıcı talebi: "2d turda altlık harita ayarlandığı gibi kalsın dönmesin."
+                // Heading KESİNLİKLE döndürülmez/artırılmaz, altlık harita ayarlandığı yön ve açıda sabit kalır!
                 pitchRef.current = -89.9;
+                updateCameraView();
+
+                if (viewer && !viewer.isDestroyed()) {
+                  viewer.scene.requestRender();
+                }
               } else {
+                // 3D Perspektif Tur: 360° sinematik küresel yörünge dönüşü
+                // 60 FPS referanslı delta-time adımı: 60Hz, 90Hz ve 120Hz ekranlarda kasıntısız sabit hız
+                const headingStep = baseSpeed * (dt * 60);
+                const nextHeading = (headingRef.current + headingStep) % 360;
+                headingRef.current = nextHeading;
+
                 if (pitchRef.current < -65) {
                   pitchRef.current = -38;
                 }
-              }
 
-              updateCameraView();
+                updateCameraView();
 
-              if (viewer && !viewer.isDestroyed()) {
-                viewer.scene.requestRender();
-              }
+                if (viewer && !viewer.isDestroyed()) {
+                  viewer.scene.requestRender();
+                }
 
-              // Cihaz profilinin throttle frekansına göre React state güncelle (UI lag önleme)
-              if (now - lastHeadingNotification > currentProf.throttleNotificationMs) {
-                lastHeadingNotification = now;
-                onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
+                // Cihaz profilinin throttle frekansına göre React state güncelle (UI lag önleme)
+                if (now - lastHeadingNotification > currentProf.throttleNotificationMs) {
+                  lastHeadingNotification = now;
+                  onCameraChangeRef.current({ heading: Math.round(nextHeading * 10) / 10 });
+                }
               }
             }
           } else if (isPenToolRef.current) {
@@ -1352,6 +1366,147 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         },
       });
       createdEntities.push(mainPolylineEntity);
+
+      // 3. Parsel Cephe Boyları (Kenar Ölçüleri) - Çizgilere paralel, iç içe girmeyecek şekilde stil renginde yazdırma
+      if (parcelStyle.showEdgeDimensions !== false && coords.length >= 2) {
+        // Parsel ağırlık merkezi (centroid) hesapla - normal vektörünü daima dışarıya itmek için
+        let centroidLng = 0;
+        let centroidLat = 0;
+        coords.forEach((c) => {
+          centroidLng += c.lng;
+          centroidLat += c.lat;
+        });
+        centroidLng /= coords.length;
+        centroidLat /= coords.length;
+
+        for (let i = 0; i < coords.length; i++) {
+          const nextIdx = (i + 1) % coords.length;
+          // Kapalı olmayan 2 noktalı çizgide son noktayı atla
+          if (coords.length === 2 && i === 1) break;
+
+          const c0 = coords[i];
+          const c1 = coords[nextIdx];
+
+          const p0 = closedElevatedPoints[i];
+          const p1 = closedElevatedPoints[nextIdx];
+          if (!p0 || !p1) continue;
+
+          // 3D Öklid mesafesini hesapla
+          const edgeDistance = Cesium.Cartesian3.distance(p0, p1);
+          if (edgeDistance < 0.5) continue; // Mikro segmentleri atla
+
+          const formattedDistance =
+            edgeDistance >= 1000
+              ? `${(edgeDistance / 1000).toFixed(2)} km`
+              : `${edgeDistance.toFixed(1)} m`;
+
+          // Kenarın coğrafi orta noktası
+          const midLng = (c0.lng + c1.lng) / 2;
+          const midLat = (c0.lat + c1.lat) / 2;
+          const midAlt = getCoordElevation(midLng, midLat) + lineAltOffset + 0.6;
+
+          // Kenar yön vektörü
+          const cosLat = Math.cos((midLat * Math.PI) / 180);
+          const dLng = (c1.lng - c0.lng) * cosLat;
+          const dLat = c1.lat - c0.lat;
+          const edgeLen = Math.sqrt(dLng * dLng + dLat * dLat);
+
+          // Çizgiye dik dikme (normal) vektörü
+          let nx = -dLat / (edgeLen || 1);
+          let ny = dLng / (edgeLen || 1);
+
+          // Normal vektörün parselin dışına yöneldiğinden emin ol ("iç içe girmeyecek")
+          const toCentroidX = midLng - centroidLng;
+          const toCentroidY = midLat - centroidLat;
+          if (nx * toCentroidX + ny * toCentroidY < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+
+          // Dışarıya doğru güvenli ofset mesafesi (~4.5m ila 10m - çizgi üzerine veya içine binmez)
+          const outwardOffsetMeters = Math.min(10, Math.max(4.5, edgeDistance * 0.04));
+          const offsetLng = (nx * outwardOffsetMeters) / (111320 * cosLat);
+          const offsetLat = (ny * outwardOffsetMeters) / 110540;
+
+          const labelPosition = Cesium.Cartesian3.fromDegrees(
+            midLng + offsetLng,
+            midLat + offsetLat,
+            midAlt
+          );
+
+          // Çizginin coğrafi açısı (Doğu eksenine göre radyan)
+          const lineAzimuth = Math.atan2(dLat, dLng);
+
+          // Stil renginde Retina çözünürlüklü özel Canvas Rozeti çiz
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            const dpr = 2.0;
+            ctx.font = 'bold 12px ui-sans-serif, system-ui, -apple-system, sans-serif';
+            const textMetrics = ctx.measureText(formattedDistance);
+            const textW = Math.ceil(textMetrics.width);
+            const padX = 12;
+            const boxW = textW + padX * 2;
+            const boxH = 22;
+
+            canvas.width = boxW * dpr;
+            canvas.height = boxH * dpr;
+            ctx.scale(dpr, dpr);
+
+            // Koyu cam arka plan
+            ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
+            ctx.beginPath();
+            ctx.roundRect(1, 1, boxW - 2, boxH - 2, 6);
+            ctx.fill();
+
+            // Stil renginde sınır çizgisi
+            ctx.strokeStyle = parcelStyle.borderColor || '#38bdf8';
+            ctx.lineWidth = 1.4;
+            if (parcelStyle.glowEffect) {
+              ctx.shadowColor = parcelStyle.borderColor || '#38bdf8';
+              ctx.shadowBlur = 5;
+            }
+            ctx.stroke();
+
+            // Stil renginde metin
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = parcelStyle.borderColor || '#38bdf8';
+            ctx.font = 'bold 11px ui-sans-serif, system-ui, -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(formattedDistance, boxW / 2, boxH / 2);
+
+            // Cesium Entity olarak ekle
+            const edgeLabelEntity = viewer.entities.add({
+              name: `Cephe ${i + 1} (${formattedDistance})`,
+              position: labelPosition,
+              billboard: {
+                image: canvas,
+                verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 4500, 0.45),
+                // Çizgilere paralel yazdırma: Ekran açısına göre döndürülür, asla ters dönmez
+                rotation: new Cesium.CallbackProperty(() => {
+                  const headingRad = Cesium.Math.toRadians(headingRef.current || 0);
+                  let screenAngle = lineAzimuth - headingRad;
+                  while (screenAngle > Math.PI / 2) screenAngle -= Math.PI;
+                  while (screenAngle < -Math.PI / 2) screenAngle += Math.PI;
+                  return -screenAngle;
+                }, false),
+                // Kullanıcı talebi: "kml çizim animasyonu bitince parsel cephe boylarını ... yazdırma"
+                show: new Cesium.CallbackProperty(() => {
+                  if (parcelStyle.showEdgeDimensions === false) return false;
+                  if (!parcelStyle.penTool) return true;
+                  const elapsed = Date.now() % totalCycleMs;
+                  return elapsed >= drawDurationMs;
+                }, false),
+              },
+            });
+            createdEntities.push(edgeLabelEntity);
+          }
+        }
+      }
 
       // 4. Köşe Noktaları (Köşe Başlangıç / Bitiş Noktaları)
       if (parcelStyle.showStartEndMarkers && coords.length > 0) {
@@ -1838,25 +1993,30 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     const viewer = viewerRef.current;
     if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
 
+    const currentRange = rangeRef.current || 1000;
+    const nextRange = Math.max(35, currentRange * 0.72);
+    rangeRef.current = nextRange;
+    onCameraChangeRef.current({ range: nextRange });
+
     if (isTouringRef.current) {
-      const nextRange = Math.max(80, rangeRef.current * 0.75);
-      rangeRef.current = nextRange;
-      onCameraChangeRef.current({ range: nextRange });
       updateCameraView();
+      viewer.scene.requestRender();
       return;
     }
 
     try {
-      const height = viewer.camera.positionCartographic?.height || rangeRef.current || 1000;
-      const moveAmount = Math.max(30, height * 0.35);
+      const height = viewer.camera.positionCartographic?.height || currentRange;
+      const moveAmount = Math.max(25, height * 0.32);
       viewer.camera.zoomIn(moveAmount);
-      const newHeight = viewer.camera.positionCartographic?.height || Math.max(50, height - moveAmount);
-      rangeRef.current = newHeight;
-      onCameraChangeRef.current({ range: newHeight });
-      viewer.scene.requestRender();
+      const newHeight = viewer.camera.positionCartographic?.height;
+      if (newHeight && newHeight > 10) {
+        rangeRef.current = newHeight;
+        onCameraChangeRef.current({ range: newHeight });
+      }
     } catch (e) {
-      console.warn('ZoomIn error:', e);
+      updateCameraView();
     }
+    viewer.scene.requestRender();
   }, [updateCameraView]);
 
   // Kamera Uzaklaştırma (Küçültme -)
@@ -1864,25 +2024,30 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     const viewer = viewerRef.current;
     if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
 
+    const currentRange = rangeRef.current || 1000;
+    const nextRange = Math.min(50000, currentRange * 1.38);
+    rangeRef.current = nextRange;
+    onCameraChangeRef.current({ range: nextRange });
+
     if (isTouringRef.current) {
-      const nextRange = Math.min(50000, rangeRef.current * 1.35);
-      rangeRef.current = nextRange;
-      onCameraChangeRef.current({ range: nextRange });
       updateCameraView();
+      viewer.scene.requestRender();
       return;
     }
 
     try {
-      const height = viewer.camera.positionCartographic?.height || rangeRef.current || 1000;
-      const moveAmount = Math.max(40, height * 0.45);
+      const height = viewer.camera.positionCartographic?.height || currentRange;
+      const moveAmount = Math.max(35, height * 0.42);
       viewer.camera.zoomOut(moveAmount);
-      const newHeight = viewer.camera.positionCartographic?.height || (height + moveAmount);
-      rangeRef.current = newHeight;
-      onCameraChangeRef.current({ range: newHeight });
-      viewer.scene.requestRender();
+      const newHeight = viewer.camera.positionCartographic?.height;
+      if (newHeight && newHeight > 10) {
+        rangeRef.current = newHeight;
+        onCameraChangeRef.current({ range: newHeight });
+      }
     } catch (e) {
-      console.warn('ZoomOut error:', e);
+      updateCameraView();
     }
+    viewer.scene.requestRender();
   }, [updateCameraView]);
 
   // 2D Kuşbakışı Tur Başlat / Durdur
@@ -1925,8 +2090,28 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [isRecording, startVideoRecording, stopVideoRecording]);
 
-  // Ekrandaki Hızlı Erişim İkon Çubuğu Serbestçe Sürükleme (Kaydırma) Durumu
+  // Ekrandaki Hızlı Erişim İkon Çubuğu Serbestçe Sürükleme, Ölçekleme ve Gizleme Durumu
   const [iconBarPos, setIconBarPos] = useState<{ x: number; y: number } | null>(null);
+  const [isIconBarHidden, setIsIconBarHidden] = useState<boolean>(() => loadIconBarPrefs().isHidden);
+  const [iconBarScale, setIconBarScale] = useState<number>(() => loadIconBarPrefs().scale);
+
+  const toggleHideIconBar = useCallback(() => {
+    setIsIconBarHidden((prev) => {
+      const next = !prev;
+      saveIconBarPrefs({ isHidden: next });
+      return next;
+    });
+  }, []);
+
+  const cycleIconBarScale = useCallback(() => {
+    setIconBarScale((prev) => {
+      // 0.85 (Küçük) -> 1.0 (Normal) -> 1.25 (Büyük) -> 0.85 döngüsü
+      const next = prev < 0.95 ? 1.0 : prev < 1.15 ? 1.25 : 0.85;
+      saveIconBarPrefs({ scale: next });
+      return next;
+    });
+  }, []);
+
   const isDraggingBarRef = useRef<boolean>(false);
   const dragBarStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number }>({
     clientX: 0,
@@ -2168,8 +2353,32 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           </div>
         )}
 
+        {/* Gizlenmiş İkon Çubuğunu Geri Açma Sekmesi (Ekran Sağ Kenarı) */}
+        {isIconBarHidden && showMapControls && (
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+            <button
+              type="button"
+              onClick={toggleHideIconBar}
+              className="flex flex-col items-center gap-1.5 py-3 px-1.5 rounded-l-2xl bg-slate-950/92 hover:bg-slate-900 border-l border-y border-sky-400/50 hover:border-sky-400 text-sky-400 hover:text-sky-300 shadow-2xl shadow-black backdrop-blur-2xl transition-all duration-200 active:scale-95 cursor-pointer group"
+              title="İkon Çubuğunu Aç / Göster"
+            >
+              <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+              <div className="flex flex-col items-center gap-0.5 text-[8px] font-black tracking-widest text-slate-300 group-hover:text-sky-300 uppercase py-1">
+                <span>A</span>
+                <span>R</span>
+                <span>A</span>
+                <span>Ç</span>
+                <span>L</span>
+                <span>A</span>
+                <span>R</span>
+              </div>
+              <Eye className="w-3.5 h-3.5 text-sky-400/80 group-hover:text-sky-300" />
+            </button>
+          </div>
+        )}
+
         {/* Ekran Sağı Dikey Çubuk: Büyüt/Küçült, 2D/3D, Ortala, Kuzey, Konum, HD Fotoğraf, 3D Tur, Kayıt */}
-        {showMapControls && (
+        {!isIconBarHidden && showMapControls && (
           <div
             ref={iconBarRef}
             style={
@@ -2177,17 +2386,21 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                 ? {
                     left: `${iconBarPos.x}px`,
                     top: `${iconBarPos.y}px`,
-                    transform: 'none',
+                    transform: `scale(${iconBarScale})`,
+                    transformOrigin: 'top left',
                     right: 'auto',
                     bottom: 'auto',
                   }
-                : undefined
+                : {
+                    transform: `translateY(-50%) scale(${iconBarScale})`,
+                    transformOrigin: 'right center',
+                  }
             }
-            className={`absolute z-30 flex flex-col items-center gap-1 sm:gap-1.5 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none scale-75 sm:scale-85 md:scale-90 lg:scale-100 transition-all max-h-[95vh] overflow-y-auto scrollbar-none ${
-              iconBarPos ? '' : 'right-1.5 sm:right-3 top-1/2 -translate-y-1/2 origin-right'
+            className={`absolute z-30 flex flex-col items-center gap-1 sm:gap-1.5 p-1 rounded-xl bg-slate-950/85 backdrop-blur-xl border border-white/15 shadow-xl shadow-black/80 select-none transition-all max-h-[95vh] overflow-y-auto scrollbar-none ${
+              iconBarPos ? '' : 'right-1.5 sm:right-3 top-1/2'
             }`}
           >
-            {/* 0. İkon Çubuğu Sürükleme (Kaydırma) Tutamacı */}
+            {/* 0. İkon Çubuğu Sürükleme (Kaydırma) Tutamacı ve Üst Araçlar */}
             <div
               onPointerDown={handleBarPointerDown}
               onPointerMove={handleBarPointerMove}
@@ -2200,16 +2413,39 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               <GripVertical className="w-3.5 h-3.5 text-sky-400" />
             </div>
 
-            {iconBarPos && (
+            {/* İkon Çubuğu Boyutlandırma (%85 - %100 - %125) ve Gizleme Butonları */}
+            <div className="w-full flex flex-col gap-0.5 pb-0.5 border-b border-white/10">
               <button
                 type="button"
-                onClick={() => setIconBarPos(null)}
-                className="w-full py-0.5 flex items-center justify-center text-[7px] font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded transition cursor-pointer"
-                title="İkon Çubuğunu Sağ Kenara Sıfırla"
+                onClick={cycleIconBarScale}
+                className="w-full py-0.5 flex items-center justify-center gap-1 text-[7px] font-bold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 rounded transition cursor-pointer"
+                title="İkon ve Çubuk Boyutunu Büyüt / Küçült (%85, %100, %125)"
               >
-                SIFIRLA
+                <Scaling className="w-2.5 h-2.5 text-sky-400" />
+                <span>%{Math.round(iconBarScale * 100)}</span>
               </button>
-            )}
+
+              <button
+                type="button"
+                onClick={toggleHideIconBar}
+                className="w-full py-0.5 flex items-center justify-center gap-1 text-[7px] font-bold text-rose-300 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 rounded transition cursor-pointer"
+                title="İkon Çubuğunu Gizle"
+              >
+                <EyeOff className="w-2.5 h-2.5 text-rose-400" />
+                <span>GİZLE</span>
+              </button>
+
+              {iconBarPos && (
+                <button
+                  type="button"
+                  onClick={() => setIconBarPos(null)}
+                  className="w-full py-0.5 flex items-center justify-center text-[7px] font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded transition cursor-pointer"
+                  title="İkon Çubuğunu Sağ Kenara Sıfırla"
+                >
+                  SIFIRLA
+                </button>
+              )}
+            </div>
 
             {/* 1. Büyütme (+) Butonu */}
             <button

@@ -62,6 +62,12 @@ import {
   hasSavedDefaultCompanyInfo,
   clearDefaultCompanyInfo,
 } from '../utils/watermarkStorage';
+import {
+  saveDefaultTourSettings,
+  loadDefaultTourSettings,
+  saveDefaultStyleSettings,
+  loadDefaultStyleSettings,
+} from '../utils/settingsStorage';
 
 interface ControlPanelProps {
   baseMap: BaseMapType;
@@ -136,6 +142,79 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const [hasSavedDefaults, setHasSavedDefaults] = useState<boolean>(() => hasSavedDefaultCompanyInfo());
   const [defaultSaveFeedback, setDefaultSaveFeedback] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  // 3D Tur varsayılan ayar durumu
+  const [hasSavedTourDefaults, setHasSavedTourDefaults] = useState<boolean>(() => !!loadDefaultTourSettings());
+  const [tourSaveFeedback, setTourSaveFeedback] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  // Parsel Stil varsayılan ayar durumu
+  const [hasSavedStyleDefaults, setHasSavedStyleDefaults] = useState<boolean>(() => !!loadDefaultStyleSettings());
+  const [styleSaveFeedback, setStyleSaveFeedback] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  const handleSaveTourDefaults = () => {
+    const ok = saveDefaultTourSettings({
+      tourSpeed: cameraState.tourSpeed,
+      pitch: cameraState.pitch,
+      range: cameraState.range,
+      baseMap,
+      videoFormat,
+    });
+    if (ok) {
+      setHasSavedTourDefaults(true);
+      setTourSaveFeedback({ message: '3D Tur ve kamera ayarları varsayılan olarak kaydedildi!' });
+    } else {
+      setTourSaveFeedback({ message: 'Kaydetme başarısız oldu.', isError: true });
+    }
+    setTimeout(() => setTourSaveFeedback(null), 3500);
+  };
+
+  const handleResetTourDefaults = () => {
+    try {
+      localStorage.removeItem('PARSEL_STUDIO_DEFAULT_3D_TOUR');
+      setHasSavedTourDefaults(false);
+      const prof = getDeviceOptimizationProfile();
+      onCameraChange({ tourSpeed: prof.tourSpeed, pitch: -89.0, range: 650 });
+      setTourSaveFeedback({ message: 'Tur ayarları fabrika değerlerine sıfırlandı.' });
+    } catch (e) {
+      setTourSaveFeedback({ message: 'Sıfırlama başarısız oldu.', isError: true });
+    }
+    setTimeout(() => setTourSaveFeedback(null), 3500);
+  };
+
+  const handleSaveStyleDefaults = () => {
+    const ok = saveDefaultStyleSettings(parcelStyle);
+    if (ok) {
+      setHasSavedStyleDefaults(true);
+      setStyleSaveFeedback({ message: 'Parsel stil ayarları varsayılan olarak kaydedildi!' });
+    } else {
+      setStyleSaveFeedback({ message: 'Kaydetme başarısız oldu.', isError: true });
+    }
+    setTimeout(() => setStyleSaveFeedback(null), 3500);
+  };
+
+  const handleResetStyleDefaults = () => {
+    try {
+      localStorage.removeItem('PARSEL_STUDIO_DEFAULT_STYLE');
+      setHasSavedStyleDefaults(false);
+      onParcelStyleChange({
+        borderColor: '#38bdf8',
+        borderWidth: 4,
+        fillColor: '#38bdf8',
+        fillOpacity: 0.25,
+        extrusionHeight: 0,
+        dashedBorder: false,
+        glowEffect: true,
+        showStartEndMarkers: false,
+        penTool: false,
+        penToolSpeed: 1,
+        showEdgeDimensions: true,
+      });
+      setStyleSaveFeedback({ message: 'Stil ayarları fabrika varsayılanına sıfırlandı.' });
+    } catch (e) {
+      setStyleSaveFeedback({ message: 'Sıfırlama başarısız oldu.', isError: true });
+    }
+    setTimeout(() => setStyleSaveFeedback(null), 3500);
+  };
 
   // Device type detection for optimal sizing
   const getDeviceInfo = () => {
@@ -1098,6 +1177,58 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     Kuşbakışı
                   </button>
                 </div>
+
+                {/* 3D Tur Ayarlarını Varsayılan Olarak Kaydetme Kartı */}
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-indigo-500/15 border border-amber-400/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>3D Tur Ayarlarını Varsayılan Yap</span>
+                    </div>
+                    {hasSavedTourDefaults && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
+                        Kayıtlı Profil Aktif
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Dönüş tur hızı ({cameraState.tourSpeed.toFixed(1)}x), kamera mesafesi ({cameraState.range}m), açı ({cameraState.pitch}°) ve altlık haritayı varsayılan olarak kaydedin.
+                  </p>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveTourDefaults}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Varsayılan Olarak Kaydet</span>
+                    </button>
+
+                    {hasSavedTourDefaults && (
+                      <button
+                        type="button"
+                        onClick={handleResetTourDefaults}
+                        className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium transition cursor-pointer"
+                        title="Varsayılan Tur Ayarlarını Sıfırla"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {tourSaveFeedback && (
+                    <div
+                      className={`text-[10px] font-semibold px-2 py-1 rounded text-center animate-in fade-in duration-200 ${
+                        tourSaveFeedback.isError
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {tourSaveFeedback.message}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1322,6 +1453,91 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     onChange={(e) => onParcelStyleChange({ showStartEndMarkers: e.target.checked })}
                     className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
                   />
+                </div>
+
+                {/* Parsel Cephe Boyları (Kenar Ölçüleri) Toggle */}
+                <div className="p-3 rounded-xl bg-gradient-to-r from-sky-500/10 via-indigo-500/10 to-teal-500/10 border border-sky-400/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0 text-xs font-bold">
+                        📏
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-white font-bold flex items-center gap-1.5 text-xs">
+                          <span>Parsel Cephe Boylarını Yazdır</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                            YENİ
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-slate-300">
+                          Çizgilere paralel, iç içe girmeyecek şekilde stil renginde cephe uzunluklarını gösterir
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={parcelStyle.showEdgeDimensions !== false}
+                      onChange={(e) => onParcelStyleChange({ showEdgeDimensions: e.target.checked })}
+                      className="w-4 h-4 accent-sky-400 cursor-pointer rounded shrink-0 ml-2"
+                    />
+                  </div>
+                  {parcelStyle.penTool && (
+                    <div className="text-[9px] text-sky-300/90 bg-sky-500/10 px-2 py-1 rounded border border-sky-400/20 flex items-center gap-1">
+                      <span>⚡ KML çizim animasyonu tamamlandığında cephe boyları otomatik yazdırılır.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Stil Ayarlarını Varsayılan Olarak Kaydetme Kartı */}
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-emerald-500/15 border border-amber-400/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Parsel Stilini Varsayılan Yap</span>
+                    </div>
+                    {hasSavedStyleDefaults && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
+                        Kayıtlı Stil Aktif
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Sınır rengi ({parcelStyle.borderColor}), kalınlık ({parcelStyle.borderWidth}px), dolgu rengi, parlama ve cephe boyu tercihlerini varsayılan olarak kaydedin.
+                  </p>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveStyleDefaults}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Varsayılan Olarak Kaydet</span>
+                    </button>
+
+                    {hasSavedStyleDefaults && (
+                      <button
+                        type="button"
+                        onClick={handleResetStyleDefaults}
+                        className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium transition cursor-pointer"
+                        title="Varsayılan Stili Sıfırla"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {styleSaveFeedback && (
+                    <div
+                      className={`text-[10px] font-semibold px-2 py-1 rounded text-center animate-in fade-in duration-200 ${
+                        styleSaveFeedback.isError
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {styleSaveFeedback.message}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

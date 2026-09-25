@@ -10,6 +10,8 @@ import {
   Minus,
   RotateCcw,
   Maximize2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { WatermarkConfig, ParcelInfo } from '../types';
 
@@ -161,7 +163,21 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
     onUpdateConfig({ customPosition: null, scale: 1.0 });
   }, [onUpdateConfig]);
 
-  if (!config.visible) return null;
+  if (!config.visible) {
+    return (
+      <div className="absolute bottom-20 right-3 sm:bottom-6 sm:right-6 z-30 pointer-events-auto select-none">
+        <button
+          type="button"
+          onClick={() => onUpdateConfig?.({ visible: true })}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950/90 hover:bg-slate-900 border border-sky-400/50 hover:border-sky-400 text-sky-300 hover:text-white text-xs font-semibold backdrop-blur-xl shadow-2xl transition active:scale-95 cursor-pointer"
+          title="Firma Filigranını Ekrana Getir"
+        >
+          <Eye className="w-3.5 h-3.5 text-sky-400" />
+          <span>Filigranı Göster</span>
+        </button>
+      </div>
+    );
+  }
 
   const positionClasses: Record<string, string> = {
     'bottom-right': 'bottom-20 right-3 sm:bottom-6 sm:right-6',
@@ -328,6 +344,17 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
                   <RotateCcw className="w-2.5 h-2.5" />
                 </button>
               )}
+
+              {/* Filigran Gizle Butonu */}
+              <button
+                type="button"
+                onClick={() => onUpdateConfig?.({ visible: false })}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 hover:bg-rose-500/20 active:bg-rose-500/30 text-slate-400 hover:text-rose-300 border border-white/10 hover:border-rose-400/30 transition cursor-pointer text-[8px] font-bold ml-0.5"
+                title="Filigranı Ekranda Gizle"
+              >
+                <EyeOff className="w-2.5 h-2.5 text-rose-400" />
+                <span>GİZLE</span>
+              </button>
             </div>
           </div>
 

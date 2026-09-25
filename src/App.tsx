@@ -16,6 +16,7 @@ import { AppUpdateChecker } from './components/AppUpdateChecker';
 import { IzgorenAdScreen } from './components/IzgorenAdScreen';
 import { parseKMZFile, parseKMLString, parseGeoJSON } from './utils/geoUtils';
 import { loadDefaultCompanyInfo } from './utils/watermarkStorage';
+import { loadDefaultTourSettings, loadDefaultStyleSettings } from './utils/settingsStorage';
 import { getDeviceOptimizationProfile } from './utils/deviceOptimizer';
 import {
   Smartphone,
@@ -38,11 +39,17 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Base Map Layer (Default to Google Hybrid)
-  const [baseMap, setBaseMap] = useState<BaseMapType>('google_hybrid');
+  // Base Map Layer (Default to Google Hybrid or saved default)
+  const [baseMap, setBaseMap] = useState<BaseMapType>(() => {
+    const saved = loadDefaultTourSettings();
+    return saved?.baseMap || 'google_hybrid';
+  });
 
   // Video Frame Format
-  const [videoFormat, setVideoFormat] = useState<VideoFormatType>('reels');
+  const [videoFormat, setVideoFormat] = useState<VideoFormatType>(() => {
+    const saved = loadDefaultTourSettings();
+    return saved?.videoFormat || 'reels';
+  });
 
   // 3D Parsel Studio Panel State (Open by default on desktop, closed on mobile)
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(() => {
@@ -52,14 +59,15 @@ export default function App() {
     return false;
   });
 
-  // 3D Camera State - Cihaz sınıfına (Telefon, Tablet, PC) göre otomatik hız optimizasyonu
+  // 3D Camera State - Cihaz sınıfına (Telefon, Tablet, PC) göre otomatik hız optimizasyonu veya kayıtlı varsayılanlar
   const [cameraState, setCameraState] = useState<CameraState>(() => {
     const prof = getDeviceOptimizationProfile();
+    const saved = loadDefaultTourSettings();
     return {
-      pitch: -89.0,
+      pitch: saved?.pitch ?? -89.0,
       heading: 0,
-      range: 650,
-      tourSpeed: prof.tourSpeed,
+      range: saved?.range ?? 650,
+      tourSpeed: saved?.tourSpeed ?? prof.tourSpeed,
       isTouring: false,
       elevation: 0,
       viewMode: '2d',
@@ -69,18 +77,26 @@ export default function App() {
   // Active Loaded Parcel (Null by default so real current location is shown on startup)
   const [activeParcel, setActiveParcel] = useState<ParcelInfo | null>(null);
 
-  // Parcel Styling
-  const [parcelStyle, setParcelStyle] = useState<ParcelStyle>({
-    borderColor: '#38bdf8',
-    borderWidth: 4,
-    fillColor: '#38bdf8',
-    fillOpacity: 0.25,
-    extrusionHeight: 0,
-    dashedBorder: false,
-    glowEffect: true,
-    showStartEndMarkers: false,
-    penTool: false,
-    penToolSpeed: 1,
+  // Parcel Styling (Kayıtlı varsayılan stil varsa otomatik yüklenir)
+  const [parcelStyle, setParcelStyle] = useState<ParcelStyle>(() => {
+    const base: ParcelStyle = {
+      borderColor: '#38bdf8',
+      borderWidth: 4,
+      fillColor: '#38bdf8',
+      fillOpacity: 0.25,
+      extrusionHeight: 0,
+      dashedBorder: false,
+      glowEffect: true,
+      showStartEndMarkers: false,
+      penTool: false,
+      penToolSpeed: 1,
+      showEdgeDimensions: true,
+    };
+    const saved = loadDefaultStyleSettings();
+    if (saved) {
+      return { ...base, ...saved };
+    }
+    return base;
   });
 
   // Watermark Banner Config (Defaults restored from localStorage if previously saved)
@@ -659,8 +675,8 @@ export default function App() {
           screenHeightPercent={screenHeightPercent}
           showMapControls={!showSplash}
         >
-          {/* Watermark rendered INSIDE the Cesium container when watermark is enabled and only on base map screen */}
-          {!showSplash && watermarkConfig.visible && (activeParcel || isParcelLoaded) && (
+          {/* Watermark rendered INSIDE the Cesium container (or restore button when hidden) */}
+          {!showSplash && (activeParcel || isParcelLoaded) && (
             <WatermarkOverlay
               config={watermarkConfig}
               activeParcel={activeParcel}

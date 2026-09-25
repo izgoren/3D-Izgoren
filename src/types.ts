@@ -45,6 +45,7 @@ export interface ParcelStyle {
   showStartEndMarkers: boolean;
   penTool: boolean; // KML sınırını silerek takip eden ve bitince tamamlayan çizim animasyonu
   penToolSpeed?: number; // 0.5x, 1x, 2x
+  showEdgeDimensions?: boolean; // Parsel cephe/kenar boylarını çizgilere paralel yazdırma
 }
 
 export interface WatermarkConfig {
