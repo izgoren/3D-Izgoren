@@ -226,7 +226,7 @@ export default function App() {
         const parsel = partial.parselNo || '';
         const fallbackName = ada && parsel ? `Ada ${ada} Parsel ${parsel}` : (partial.name || 'Yeni Parsel');
         return {
-          id: 'manual-parcel-' + Date.now(),
+          id: 'manual-parcel',
           name: fallbackName,
           city: partial.city ?? '',
           district: partial.district ?? '',
@@ -676,7 +676,7 @@ export default function App() {
           showMapControls={!showSplash}
         >
           {/* Watermark rendered INSIDE the Cesium container (or restore button when hidden) */}
-          {!showSplash && (activeParcel || isParcelLoaded) && (
+          {!showSplash && (activeParcel || isParcelLoaded || watermarkConfig.visible) && (
             <WatermarkOverlay
               config={watermarkConfig}
               activeParcel={activeParcel}

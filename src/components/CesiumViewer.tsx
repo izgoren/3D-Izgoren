@@ -439,6 +439,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const isTerrainActiveRef = useRef<boolean>(isTerrainActive);
   const isPenToolRef = useRef<boolean>(!!parcelStyle.penTool);
   const lastRenderedCoordsKeyRef = useRef<string>('');
+  const lastRenderedStyleKeyRef = useRef<string>('');
 
   useEffect(() => {
     isPenToolRef.current = !!parcelStyle.penTool;
@@ -848,7 +849,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         } catch (ignored) {}
       }
     },
-    [activeParcel]
+    [] // Stable callback: uses activeParcelRef.current and viewerRef.current without needless recreations
   );
 
   // Initialize Cesium
@@ -1136,27 +1137,48 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     const coords = activeParcel.coordinates;
     const len = coords.length;
     const first = coords[0];
+    const mid = coords[Math.floor(len / 2)];
     const last = coords[len - 1];
-    return `${activeParcel.id || 'p'}_${len}_${first.lng.toFixed(6)}_${first.lat.toFixed(6)}_${last.lng.toFixed(6)}_${last.lat.toFixed(6)}`;
-  }, [activeParcel?.id, activeParcel?.coordinates]);
+    return `geom_${len}_${first.lng.toFixed(6)}_${first.lat.toFixed(6)}_${mid.lng.toFixed(6)}_${mid.lat.toFixed(6)}_${last.lng.toFixed(6)}_${last.lat.toFixed(6)}`;
+  }, [activeParcel?.coordinates]);
 
   // Draw 3D Parcel with Water Flow Animation
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer || typeof Cesium === 'undefined') return;
 
+    const styleKey = `${parcelStyle.borderColor}_${parcelStyle.borderWidth}_${parcelStyle.fillColor}_${parcelStyle.fillOpacity}_${parcelStyle.glowEffect}_${parcelStyle.showEdgeDimensions}_${parcelStyle.penTool}`;
+
+    // Parsel geometrisi yoksa (örneğin koordinatsız elle giriş ekranı veya parsel temizleme):
+    // Harita ekranını veya ayarlarını ASLA değiştirme; sadece önceden çizilmiş geometri silinmişse temizle
+    if (!parcelGeometryKey || !activeParcel || !activeParcel.coordinates || activeParcel.coordinates.length < 3) {
+      if (lastRenderedCoordsKeyRef.current !== '') {
+        if (parcelEntitiesRef.current.length > 0) {
+          parcelEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
+          parcelEntitiesRef.current = [];
+        }
+        lastRenderedCoordsKeyRef.current = '';
+        lastRenderedStyleKeyRef.current = '';
+        viewer.scene.requestRender();
+      }
+      return;
+    }
+
     // Check if boundary geometry actually changed (new file upload or sample parcel)
     const isNewGeometry = lastRenderedCoordsKeyRef.current !== parcelGeometryKey;
+    const isNewStyle = lastRenderedStyleKeyRef.current !== styleKey;
 
-    // Clear previous entities
+    // Kullanıcı elle bilgi girdiğinde (İl, İlçe, Mahalle, Ada, Parsel, Fiyat, Açıklama):
+    // Geometri ve stil değişmediyse ve parsel zaten çiziliyse HİÇBİR ŞEY YAPMA!
+    // Harita ekranı, kamera pozisyonu ve ayarları kesinlikle sabit kalır, sadece filigran güncellenir.
+    if (!isNewGeometry && !isNewStyle && parcelEntitiesRef.current.length > 0) {
+      return;
+    }
+
+    // Clear previous entities only when geometry actually changed or fresh style redraw is needed
     if (parcelEntitiesRef.current.length > 0) {
       parcelEntitiesRef.current.forEach((e) => viewer.entities.remove(e));
       parcelEntitiesRef.current = [];
-    }
-
-    if (!parcelGeometryKey || !activeParcel || activeParcel.coordinates.length < 3) {
-      lastRenderedCoordsKeyRef.current = '';
-      return;
     }
 
     try {
@@ -1529,6 +1551,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
       parcelEntitiesRef.current = createdEntities;
       lastRenderedCoordsKeyRef.current = parcelGeometryKey;
+      lastRenderedStyleKeyRef.current = styleKey;
 
       viewer.scene.requestRender();
 
@@ -1540,7 +1563,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     } catch (err) {
       console.error('Parcel render error:', err);
     }
-  }, [parcelGeometryKey, parcelStyle, isCesiumReady, centerOnParcel]);
+  }, [parcelGeometryKey, parcelStyle, isCesiumReady]);
 
   // Handle format change & trigger resize
   useEffect(() => {
@@ -1815,11 +1838,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     });
     centerOnParcel(
       deviceProfileRef.current.flyDuration,
-      activeParcelRef.current || activeParcel,
+      activeParcelRef.current || undefined,
       targetPitch,
       0
     );
-  }, [centerOnParcel, activeParcel]);
+  }, [centerOnParcel]);
 
   const set3DView = useCallback(() => {
     isTouringRef.current = false;
@@ -1832,11 +1855,11 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     });
     centerOnParcel(
       deviceProfileRef.current.flyDuration,
-      activeParcelRef.current || activeParcel,
+      activeParcelRef.current || undefined,
       targetPitch,
       headingRef.current
     );
-  }, [centerOnParcel, activeParcel]);
+  }, [centerOnParcel]);
 
   const resetToNorth = useCallback(() => {
     const viewer = viewerRef.current;
@@ -1864,12 +1887,12 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     (targetPitch?: number, targetHeading?: number) => {
       centerOnParcel(
         deviceProfileRef.current.flyDuration,
-        activeParcelRef.current || activeParcel,
+        activeParcelRef.current || undefined,
         targetPitch,
         targetHeading
       );
     },
-    [centerOnParcel, activeParcel]
+    [centerOnParcel]
   );
 
   const flyToDeviceLocation = useCallback(() => {

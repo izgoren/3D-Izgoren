@@ -221,6 +221,18 @@ export const AppUpdateChecker: React.FC = () => {
                 </div>
                 <ul className="space-y-1.5 text-slate-300 text-[11px]">
                   <li className="flex items-start gap-1.5">
+                    <span className="text-amber-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">Varsayılan Kaydet Butonları En Üste Alındı:</strong> 3D Tur, Parsel Stili ve Firma sekmelerinde "Varsayılan Olarak Kaydet" kartları ilgili sekmelerin en üstüne yerleştirildi.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">Manuel Parsel Bilgileri Girişinde Harita Sabitliği:</strong> Parsel elle giriş ekranında il, ilçe, ada, parsel, alan ve fiyat bilgileri girilirken harita ekranı, kamera açısı ve ayarları kesinlikle değişmez; sadece ekrandaki ve kayıttaki filigran anında güncellenir.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-sky-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">720p HD Kadraj ve Video Kayıt Oranları:</strong> Reels (9:16), Post (1:1), Portre (4:5) ve YouTube (16:9) video kayıt ve kadraj çözünürlükleri 720p HD olarak optimize edildi.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
                     <span className="text-sky-400 font-bold shrink-0">✓</span>
                     <span><strong className="text-white">2D Kuşbakışı & 3D Perspektif Harita:</strong> 2D tam düz dik açı (-89.0°) ve 3D küre açısı tek tıkla geçiş; KML sınırlarını ekran oranına göre kadraja sıfır taşma ile tam ortalama.</span>
                   </li>
