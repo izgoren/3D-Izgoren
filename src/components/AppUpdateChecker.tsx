@@ -221,6 +221,18 @@ export const AppUpdateChecker: React.FC = () => {
                 </div>
                 <ul className="space-y-1.5 text-slate-300 text-[11px]">
                   <li className="flex items-start gap-1.5">
+                    <span className="text-fuchsia-400 font-bold shrink-0">✨</span>
+                    <span><strong className="text-white">izAIpro Parsel & Firma Bilgileriyle Otomatik Metin ve Seslendirme:</strong> Girilen parsel (İl, İlçe, Mahalle, Ada, Parsel, m², Fiyat) ve firma (Marka, Telefon, Web) bilgileri kullanılarak tek tıkla satış/Reels/kurumsal odaklı otomatik tanıtım metni üretme, ayrıca bağımsız büyük <strong>"Metni Seslendir (Dinle)"</strong> butonu ve tek tıkla <strong>"Metin Üret ve Seslendir"</strong> özellikleri eklendi.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-cyan-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">Parsel Cephe Boyları İçin Ölçek Ayarı:</strong> Sınır çizgilerine paralel yazdırılan cephe uzunluğu etiketlerinin boyutunu küçültüp büyütmek için Stil sekmesine hassas ölçek çubuğu (%40 - %150) ve hızlı kademe butonları (Küçük %60, Kompakt %75, Standart %100) eklendi.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-amber-400 font-bold shrink-0">✓</span>
+                    <span><strong className="text-white">Video Kayıt Formatına Göre Otomatik Filigran Ölçekleme:</strong> Reels (9:16), Post (1:1), Portre (4:5) ve YouTube (16:9) video formatı ve kayıt çözünürlüğüne göre filigran boyutu kadraja otomatik dengeli biçimde uyarlanarak taşmalar kesin olarak engellendi.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
                     <span className="text-amber-400 font-bold shrink-0">✓</span>
                     <span><strong className="text-white">Varsayılan Kaydet Butonları En Üste Alındı:</strong> 3D Tur, Parsel Stili ve Firma sekmelerinde "Varsayılan Olarak Kaydet" kartları ilgili sekmelerin en üstüne yerleştirildi.</span>
                   </li>

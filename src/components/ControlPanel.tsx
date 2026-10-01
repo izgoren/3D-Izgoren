@@ -49,6 +49,7 @@ import {
   ParcelInfo,
   ParcelStyle,
   WatermarkConfig,
+  VoiceoverConfig,
 } from '../types';
 import { parseKMLString, parseKMZFile, parseGeoJSON, formatArea } from '../utils/geoUtils';
 import { getDeviceOptimizationProfile } from '../utils/deviceOptimizer';
@@ -56,6 +57,7 @@ import { ViewerMethods } from './CesiumViewer';
 import { PWAInstallButton } from './PWAInstallButton';
 import { ParcelTab } from './ParcelTab';
 import { PriceInput } from './PriceInput';
+import { IzAIProTab } from './IzAIProTab';
 import {
   saveDefaultCompanyInfo,
   loadDefaultCompanyInfo,
@@ -83,6 +85,8 @@ interface ControlPanelProps {
   onParcelStyleChange: (partial: Partial<ParcelStyle>) => void;
   watermarkConfig: WatermarkConfig;
   onWatermarkChange: (partial: Partial<WatermarkConfig>) => void;
+  voiceoverConfig?: VoiceoverConfig;
+  onVoiceoverChange?: (partial: Partial<VoiceoverConfig>) => void;
   isTerrainActive: boolean;
   onToggleTerrain: () => void;
   viewerMethods: ViewerMethods | null;
@@ -93,7 +97,7 @@ interface ControlPanelProps {
   onClearParcel?: () => void;
 }
 
-type TabType = 'parcel' | 'camera' | 'style' | 'watermark' | 'export';
+type TabType = 'parcel' | 'camera' | 'style' | 'watermark' | 'izaipro' | 'export';
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   baseMap,
@@ -109,6 +113,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onParcelStyleChange,
   watermarkConfig,
   onWatermarkChange,
+  voiceoverConfig,
+  onVoiceoverChange,
   isTerrainActive,
   onToggleTerrain,
   viewerMethods,
@@ -608,6 +614,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             >
               <Building className="w-3.5 h-3.5" />
               <span>Firma</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('izaipro')}
+              className={`flex-1 min-w-[58px] min-h-[42px] py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeTab === 'izaipro'
+                  ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 text-white shadow-lg shadow-fuchsia-500/30 ring-1 ring-fuchsia-400'
+                  : 'text-fuchsia-300/90 hover:bg-fuchsia-500/10 hover:text-fuchsia-200'
+              }`}
+              title="izAIpro: Yapay Zeka Seslendirme & Video Stüdyosu"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <span className="bg-gradient-to-r from-amber-300 via-fuchsia-200 to-white bg-clip-text text-transparent">izAIpro</span>
             </button>
 
             <button
@@ -1533,6 +1552,48 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       className="w-4 h-4 accent-sky-400 cursor-pointer rounded shrink-0 ml-2"
                     />
                   </div>
+                  {parcelStyle.showEdgeDimensions !== false && (
+                    <div className="pt-2 border-t border-white/10 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-300 font-medium">Cephe Boyu Etiket Ölçeği (Küçült/Büyüt):</span>
+                        <span className="text-sky-300 font-mono font-bold">
+                          %{Math.round((parcelStyle.edgeDimensionScale ?? 0.75) * 100)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.4}
+                        max={1.5}
+                        step={0.05}
+                        value={parcelStyle.edgeDimensionScale ?? 0.75}
+                        onChange={(e) =>
+                          onParcelStyleChange({ edgeDimensionScale: parseFloat(e.target.value) })
+                        }
+                        className="w-full accent-sky-400 cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                      />
+                      <div className="flex gap-1.5 pt-0.5">
+                        {[
+                          { label: 'Küçük (%60)', val: 0.6 },
+                          { label: 'Kompakt (%75)', val: 0.75 },
+                          { label: 'Standart (%100)', val: 1.0 },
+                        ].map((btn) => (
+                          <button
+                            key={btn.val}
+                            type="button"
+                            onClick={() => onParcelStyleChange({ edgeDimensionScale: btn.val })}
+                            className={`flex-1 py-1 px-1.5 rounded-lg text-[9px] font-semibold border transition cursor-pointer ${
+                              Math.abs((parcelStyle.edgeDimensionScale ?? 0.75) - btn.val) < 0.04
+                                ? 'bg-sky-500 text-slate-950 border-sky-400 font-bold'
+                                : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                            }`}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {parcelStyle.penTool && (
                     <div className="text-[9px] text-sky-300/90 bg-sky-500/10 px-2 py-1 rounded border border-sky-400/20 flex items-center gap-1">
                       <span>⚡ KML çizim animasyonu tamamlandığında cephe boyları otomatik yazdırılır.</span>
@@ -1542,7 +1603,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </div>
             )}
 
-            {/* TAB 5: FİRMA BİLGİLERİ (FİLİGRAN) */}
+            {/* TAB 4: FİRMA BİLGİLERİ (FİLİGRAN) */}
             {activeTab === 'watermark' && (
               <div className="space-y-3.5">
                 {/* Firma Bilgilerini Varsayılan Olarak Kaydet & Yönet (Sekme Başı) */}
@@ -1619,6 +1680,32 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     onChange={(e) => onWatermarkChange({ visible: e.target.checked })}
                     className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
                   />
+                </div>
+
+                {/* Video Kadrajına & Formatına Göre Otomatik Dengeli Ölçekleme */}
+                <div className="p-2.5 rounded-xl bg-gradient-to-r from-sky-500/10 to-indigo-500/10 border border-sky-400/30 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-sky-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Video Kayıt Formatına Göre Otomatik Ölçekle</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={watermarkConfig.autoScaleWithVideoFormat !== false}
+                      onChange={(e) => onWatermarkChange({ autoScaleWithVideoFormat: e.target.checked })}
+                      className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
+                      title="Reels (9:16), Post (1:1) veya YouTube (16:9) oranına göre filigran boyutunu dengeler"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[9px] text-slate-300">
+                    <span>Aktif Video Kadrajı:</span>
+                    <span className="font-mono font-bold text-amber-300 bg-black/40 px-2 py-0.5 rounded border border-white/10">
+                      {videoFormat === 'reels' && '📱 Reels (9:16) → Otomatik %82 Kompakt'}
+                      {videoFormat === 'post' && '📷 Post (1:1) → Otomatik %88 Dengeli'}
+                      {videoFormat === 'portrait' && '🖼️ Portre (4:5) → Otomatik %90 Dengeli'}
+                      {videoFormat === 'youtube' && '💻 YouTube (16:9) → Standart %100'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Firma Adı */}
@@ -1888,6 +1975,29 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   />
                 </div>
               </div>
+            )}
+
+            {/* TAB 5: İZAİPRO SESLENDİRME & AI STÜDYOSU (FİRMA SEKMESİNİN SAĞINDA) */}
+            {activeTab === 'izaipro' && (
+              <IzAIProTab
+                activeParcel={activeParcel}
+                watermarkConfig={watermarkConfig}
+                config={
+                  voiceoverConfig || {
+                    enabled: true,
+                    source: 'ai',
+                    prompt: '',
+                    generatedScript: '',
+                    voiceGender: 'natural',
+                    voiceSpeed: 1.0,
+                    voicePitch: 1.0,
+                    includeInVideo: true,
+                    originalAudioBlobUrl: null,
+                    isPlaying: false,
+                  }
+                }
+                onChangeConfig={(partial) => onVoiceoverChange?.(partial)}
+              />
             )}
 
             {/* TAB 6: KAYIT & DIŞA AKTAR */}

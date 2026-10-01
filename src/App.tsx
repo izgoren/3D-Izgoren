@@ -6,6 +6,7 @@ import {
   ParcelInfo,
   ParcelStyle,
   WatermarkConfig,
+  VoiceoverConfig,
 } from './types';
 import { CesiumViewer, ViewerMethods } from './components/CesiumViewer';
 import { ControlPanel } from './components/ControlPanel';
@@ -91,6 +92,7 @@ export default function App() {
       penTool: false,
       penToolSpeed: 1,
       showEdgeDimensions: true,
+      edgeDimensionScale: 0.75,
     };
     const saved = loadDefaultStyleSettings();
     if (saved) {
@@ -112,6 +114,8 @@ export default function App() {
       position: 'bottom-right',
       adaParselPosition: 'inside',
       opacity: 0.85,
+      scale: 1.0,
+      autoScaleWithVideoFormat: true,
       showLocationBadge: true,
       badgeStyle: 'glass',
     };
@@ -124,6 +128,24 @@ export default function App() {
     }
     return base;
   });
+
+  // izAIpro Voiceover State (Yapay Zeka ve Orijinal Seslendirme)
+  const [voiceoverConfig, setVoiceoverConfig] = useState<VoiceoverConfig>(() => ({
+    enabled: true,
+    source: 'ai',
+    prompt: '',
+    generatedScript: '',
+    voiceGender: 'natural',
+    voiceSpeed: 1.0,
+    voicePitch: 1.0,
+    includeInVideo: true,
+    originalAudioBlobUrl: null,
+    isPlaying: false,
+  }));
+
+  const handleVoiceoverChange = useCallback((partial: Partial<VoiceoverConfig>) => {
+    setVoiceoverConfig((prev) => ({ ...prev, ...partial }));
+  }, []);
 
   // Screen & Kadraj Height Scale (%50 - %100)
   const [screenHeightPercent, setScreenHeightPercent] = useState<number>(() => {
@@ -664,6 +686,7 @@ export default function App() {
           activeParcel={activeParcel}
           parcelStyle={parcelStyle}
           watermarkConfig={watermarkConfig}
+          voiceoverConfig={voiceoverConfig}
           isTerrainActive={isTerrainActive}
           onToggleTerrain={() => {
             setIsTerrainActive((prev) => !prev);
@@ -681,6 +704,7 @@ export default function App() {
               config={watermarkConfig}
               activeParcel={activeParcel}
               onUpdateConfig={handleWatermarkChange}
+              videoFormat={videoFormat}
             />
           )}
         </CesiumViewer>
@@ -718,6 +742,8 @@ export default function App() {
           onParcelStyleChange={handleParcelStyleChange}
           watermarkConfig={watermarkConfig}
           onWatermarkChange={handleWatermarkChange}
+          voiceoverConfig={voiceoverConfig}
+          onVoiceoverChange={handleVoiceoverChange}
           isTerrainActive={isTerrainActive}
           onToggleTerrain={() => setIsTerrainActive((prev) => !prev)}
           viewerMethods={viewerMethods}

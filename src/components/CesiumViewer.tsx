@@ -6,7 +6,9 @@ import {
   ParcelStyle,
   VideoFormatType,
   WatermarkConfig,
+  VoiceoverConfig,
 } from '../types';
+import { getFormatScaleFactor } from './WatermarkOverlay';
 import {
   Mountain,
   Eye,
@@ -45,6 +47,7 @@ interface CesiumViewerProps {
   activeParcel: ParcelInfo | null;
   parcelStyle: ParcelStyle;
   watermarkConfig: WatermarkConfig;
+  voiceoverConfig?: VoiceoverConfig;
   isTerrainActive: boolean;
   onToggleTerrain: () => void;
   onViewerReady?: (methods: ViewerMethods) => void;
@@ -71,23 +74,25 @@ export interface ViewerMethods {
   toggleVideoRecording?: () => void;
 }
 
-// 2D Canvas Watermark Renderer for Video & Snapshot (Proportionally scaled to recording dimensions)
+// 2D Canvas Watermark Renderer for Video & Snapshot (Proportionally scaled to recording dimensions and video format)
 function renderWatermarkToCanvas(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   config: WatermarkConfig,
   parcel: ParcelInfo | null,
-  logoImg: HTMLImageElement | null
+  logoImg: HTMLImageElement | null,
+  format?: VideoFormatType
 ) {
   if (!config.visible) return;
 
-  // Proportional watermark scaling according to recording / video dimensions & user watermark scale
+  // Proportional watermark scaling according to recording / video dimensions, user scale & video format ratio
   const isPortrait = height > width;
   const baseDim = isPortrait ? width : Math.min(width, height);
   const userScale = typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1.0;
-  // 720p base scale factor with user custom scaling
-  const scale = Math.max(0.4, Math.min(3.5, (baseDim / 720) * userScale));
+  const formatMultiplier = config.autoScaleWithVideoFormat !== false ? getFormatScaleFactor(format) : 1.0;
+  // 720p base scale factor with format multiplier and user custom scaling
+  const scale = Math.max(0.35, Math.min(3.0, (baseDim / 720) * userScale * formatMultiplier));
   const cardW = Math.min(345 * scale, width - 24 * scale);
   const cardH = 136 * scale;
   const margin = Math.max(10, 18 * scale);
@@ -405,6 +410,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   activeParcel,
   parcelStyle,
   watermarkConfig,
+  voiceoverConfig,
   isTerrainActive,
   onToggleTerrain,
   onViewerReady,
@@ -430,16 +436,22 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
   const isFlyingRef = useRef<boolean>(false);
+  const voiceoverAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Synchronized refs to decouple metadata updates (watermark) from 3D map engine lifecycle
+  // Synchronized refs to decouple metadata updates (watermark, voiceover) from 3D map engine lifecycle
   const activeParcelRef = useRef<ParcelInfo | null>(activeParcel);
   const watermarkConfigRef = useRef<WatermarkConfig>(watermarkConfig);
+  const voiceoverConfigRef = useRef<VoiceoverConfig | undefined>(voiceoverConfig);
   const onCameraChangeRef = useRef(onCameraChange);
   const baseMapRef = useRef<BaseMapType>(baseMap);
   const isTerrainActiveRef = useRef<boolean>(isTerrainActive);
   const isPenToolRef = useRef<boolean>(!!parcelStyle.penTool);
   const lastRenderedCoordsKeyRef = useRef<string>('');
   const lastRenderedStyleKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    voiceoverConfigRef.current = voiceoverConfig;
+  }, [voiceoverConfig]);
 
   useEffect(() => {
     isPenToolRef.current = !!parcelStyle.penTool;
@@ -1147,7 +1159,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     const viewer = viewerRef.current;
     if (!viewer || typeof Cesium === 'undefined') return;
 
-    const styleKey = `${parcelStyle.borderColor}_${parcelStyle.borderWidth}_${parcelStyle.fillColor}_${parcelStyle.fillOpacity}_${parcelStyle.glowEffect}_${parcelStyle.showEdgeDimensions}_${parcelStyle.penTool}`;
+    const styleKey = `${parcelStyle.borderColor}_${parcelStyle.borderWidth}_${parcelStyle.fillColor}_${parcelStyle.fillOpacity}_${parcelStyle.glowEffect}_${parcelStyle.showEdgeDimensions}_${parcelStyle.edgeDimensionScale}_${parcelStyle.penTool}`;
 
     // Parsel geometrisi yoksa (örneğin koordinatsız elle giriş ekranı veya parsel temizleme):
     // Harita ekranını veya ayarlarını ASLA değiştirme; sadece önceden çizilmiş geometri silinmişse temizle
@@ -1498,16 +1510,22 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             ctx.textBaseline = 'middle';
             ctx.fillText(formattedDistance, boxW / 2, boxH / 2);
 
+            const userEdgeScale =
+              typeof parcelStyle.edgeDimensionScale === 'number' && parcelStyle.edgeDimensionScale > 0
+                ? parcelStyle.edgeDimensionScale
+                : 0.75;
+
             // Cesium Entity olarak ekle
             const edgeLabelEntity = viewer.entities.add({
               name: `Cephe ${i + 1} (${formattedDistance})`,
               position: labelPosition,
               billboard: {
                 image: canvas,
+                scale: userEdgeScale,
                 verticalOrigin: Cesium.VerticalOrigin.CENTER,
                 horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 4500, 0.45),
+                scaleByDistance: new Cesium.NearFarScalar(50, 1.0 * userEdgeScale, 4500, 0.45 * userEdgeScale),
                 // Çizgilere paralel yazdırma: Ekran açısına göre döndürülür, asla ters dönmez
                 rotation: new Cesium.CallbackProperty(() => {
                   const headingRad = Cesium.Math.toRadians(headingRef.current || 0);
@@ -1644,14 +1662,15 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       const drawY = (offscreen.height - drawH) / 2;
       ctx.drawImage(canvas, drawX, drawY, drawW, drawH);
 
-      // 2. Burn Watermark onto Image
+      // 2. Burn Watermark onto Image with format-aware scale
       renderWatermarkToCanvas(
         ctx,
         offscreen.width,
         offscreen.height,
         watermarkConfigRef.current,
         activeParcelRef.current,
-        logoImageRef.current
+        logoImageRef.current,
+        videoFormat
       );
 
       const dataUrl = offscreen.toDataURL('image/png');
@@ -1725,14 +1744,15 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
         recordCtx.drawImage(viewerCanvas, drawX, drawY, drawW, drawH);
 
-        // 2. Paint Watermark with active settings at 720p scale
+        // 2. Paint Watermark with active format-aware settings at 720p scale
         renderWatermarkToCanvas(
           recordCtx,
           recordCanvas.width,
           recordCanvas.height,
           watermarkConfigRef.current,
           activeParcelRef.current,
-          logoImageRef.current
+          logoImageRef.current,
+          videoFormat
         );
 
         animFrameIdRef.current = requestAnimationFrame(renderFrame);
@@ -1743,6 +1763,41 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
       // Capture 30 FPS stream from 720p composite canvas
       const stream = recordCanvas.captureStream(30);
+
+      // Audio track synchronization:
+      // If izAIpro voiceover is active and configured to be included in video:
+      const vConfig = voiceoverConfigRef.current;
+      if (vConfig?.enabled && vConfig?.includeInVideo) {
+        if (vConfig.source === 'original' && vConfig.originalAudioBlobUrl) {
+          try {
+            const audioEl = new Audio(vConfig.originalAudioBlobUrl);
+            voiceoverAudioRef.current = audioEl;
+            audioEl.currentTime = 0;
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioCtx) {
+              const audioCtx = new AudioCtx();
+              const sourceNode = audioCtx.createMediaElementSource(audioEl);
+              const destNode = audioCtx.createMediaStreamDestination();
+              sourceNode.connect(destNode);
+              sourceNode.connect(audioCtx.destination);
+              const audioTracks = destNode.stream.getAudioTracks();
+              if (audioTracks && audioTracks[0]) {
+                stream.addTrack(audioTracks[0]);
+              }
+            }
+            audioEl.play().catch((e) => console.warn('Audio play error:', e));
+          } catch (e) {
+            console.warn('Original audio sync error:', e);
+          }
+        } else if (vConfig.source === 'ai' && vConfig.generatedScript && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(vConfig.generatedScript);
+          utter.lang = 'tr-TR';
+          utter.rate = vConfig.voiceSpeed || 1.0;
+          utter.pitch = vConfig.voicePitch || 1.0;
+          window.speechSynthesis.speak(utter);
+        }
+      }
 
       // MP4 priority
       const preferredMimeTypes = [
@@ -1784,6 +1839,17 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
           animFrameIdRef.current = null;
         }
 
+        if (voiceoverAudioRef.current) {
+          try {
+            voiceoverAudioRef.current.pause();
+            voiceoverAudioRef.current.currentTime = 0;
+          } catch {}
+          voiceoverAudioRef.current = null;
+        }
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+
         const isMp4 = selectedMimeType.includes('mp4');
         const blob = new Blob(recordedChunksRef.current, {
           type: isMp4 ? 'video/mp4' : selectedMimeType || 'video/mp4',
@@ -1818,6 +1884,16 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
+    }
+    if (voiceoverAudioRef.current) {
+      try {
+        voiceoverAudioRef.current.pause();
+        voiceoverAudioRef.current.currentTime = 0;
+      } catch {}
+      voiceoverAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();

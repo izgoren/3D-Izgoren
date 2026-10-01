@@ -13,18 +13,34 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { WatermarkConfig, ParcelInfo } from '../types';
+import { WatermarkConfig, ParcelInfo, VideoFormatType } from '../types';
+
+export function getFormatScaleFactor(format?: VideoFormatType): number {
+  switch (format) {
+    case 'reels':
+      return 0.82; // 9:16 Dikey kadraja zarifçe sığan kompakt oran
+    case 'post':
+      return 0.88; // 1:1 Kare formata dengeli oran
+    case 'portrait':
+      return 0.90; // 4:5 Portre formata dengeli oran
+    case 'youtube':
+    default:
+      return 1.0; // 16:9 Yatay kadraja tam oran
+  }
+}
 
 interface WatermarkOverlayProps {
   config: WatermarkConfig;
   activeParcel: ParcelInfo | null;
   onUpdateConfig?: (partial: Partial<WatermarkConfig>) => void;
+  videoFormat?: VideoFormatType;
 }
 
 export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
   config,
   activeParcel,
   onUpdateConfig,
+  videoFormat,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const [windowSize, setWindowSize] = useState({
@@ -211,6 +227,9 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
       : null);
 
   const userScale = typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1.0;
+  // Kayıt video formatına göre (reels/post/youtube) otomatik dengeli ölçek çarpanı
+  const formatMultiplier = config.autoScaleWithVideoFormat !== false ? getFormatScaleFactor(videoFormat) : 1.0;
+  const effectiveScale = Number((userScale * formatMultiplier).toFixed(2));
 
   const getTransformOrigin = (pos: string) => {
     if (config.customPosition) return 'top left';
@@ -235,13 +254,13 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
   // Compute custom position style if user has dragged the watermark
   const customStyle: React.CSSProperties = {
     opacity: config.opacity ?? 0.85,
-    transform: userScale !== 1 ? `scale(${userScale})` : undefined,
+    transform: effectiveScale !== 1 ? `scale(${effectiveScale})` : undefined,
     transformOrigin: getTransformOrigin(config.position),
   };
 
   if (config.customPosition && typeof config.customPosition.xRatio === 'number') {
-    const cardW = 320 * userScale;
-    const cardH = 140 * userScale;
+    const cardW = 320 * effectiveScale;
+    const cardH = 140 * effectiveScale;
     const maxAvailX = Math.max(1, windowSize.width - cardW - 16);
     const maxAvailY = Math.max(1, windowSize.height - cardH - 16);
     const leftPx = 8 + config.customPosition.xRatio * maxAvailX;

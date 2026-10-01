@@ -46,6 +46,7 @@ export interface ParcelStyle {
   penTool: boolean; // KML sınırını silerek takip eden ve bitince tamamlayan çizim animasyonu
   penToolSpeed?: number; // 0.5x, 1x, 2x
   showEdgeDimensions?: boolean; // Parsel cephe/kenar boylarını çizgilere paralel yazdırma
+  edgeDimensionScale?: number; // Cephe boyu etiket ölçeği (0.4 - 1.5, varsayılan 0.75)
 }
 
 export interface WatermarkConfig {
@@ -60,9 +61,26 @@ export interface WatermarkConfig {
   adaParselPosition: 'inside' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   opacity: number; // 0.1 to 1.0
   scale?: number; // 0.4 to 2.5 (1.0 = 100% standard size)
+  autoScaleWithVideoFormat?: boolean; // Kayıt video formatına göre (reels/post/youtube) otomatik dengeli ölçekleme
   showLocationBadge: boolean;
   badgeStyle: 'glass' | 'solid' | 'minimal';
   customPosition?: { xRatio: number; yRatio: number } | null; // Ekranda serbestçe sürüklenmiş oranlı konum (0 to 1)
+}
+
+export type VoiceoverSourceType = 'ai' | 'original' | 'none';
+
+export interface VoiceoverConfig {
+  enabled: boolean;
+  source: VoiceoverSourceType; // 'ai' veya 'original'
+  prompt: string;
+  generatedScript: string;
+  voiceGender: 'female' | 'male' | 'natural';
+  voiceSpeed: number; // 0.8 - 1.4
+  voicePitch: number; // 0.8 - 1.2
+  includeInVideo: boolean; // 720p video kaydına sesi dahil et
+  originalAudioBlobUrl?: string | null;
+  originalAudioDuration?: number;
+  isPlaying: boolean;
 }
 
 export interface RecordingStatus {
