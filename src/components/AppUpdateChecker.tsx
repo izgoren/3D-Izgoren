@@ -238,7 +238,7 @@ export const AppUpdateChecker: React.FC = () => {
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-emerald-400 font-bold shrink-0">✓</span>
-                    <span><strong className="text-white">Gelişmiş Hızlı Erişim İkon Çubuğu:</strong> Çubuk başına Büyütme (+) ve Küçültme (-) zoom butonları; Konum altına sırasıyla HD Fotoğraf çekme, 3D Tur başlatma/durdurma ve 1080p Video Kayıt butonları eklendi.</span>
+                    <span><strong className="text-white">Gelişmiş Hızlı Erişim İkon Çubuğu:</strong> Çubuk başına Büyütme (+) ve Küçültme (-) zoom butonları; Konum altına sırasıyla HD Fotoğraf çekme, 3D Tur başlatma/durdurma ve 720p Video Kayıt butonları eklendi.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <span className="text-amber-400 font-bold shrink-0">✓</span>

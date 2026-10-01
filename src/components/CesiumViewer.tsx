@@ -86,8 +86,8 @@ function renderWatermarkToCanvas(
   const isPortrait = height > width;
   const baseDim = isPortrait ? width : Math.min(width, height);
   const userScale = typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1.0;
-  // 1080p base scale factor with user custom scaling
-  const scale = Math.max(0.4, Math.min(3.5, (baseDim / 950) * userScale));
+  // 720p base scale factor with user custom scaling
+  const scale = Math.max(0.4, Math.min(3.5, (baseDim / 720) * userScale));
   const cardW = Math.min(345 * scale, width - 24 * scale);
   const cardH = 136 * scale;
   const margin = Math.max(10, 18 * scale);
@@ -1568,7 +1568,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     };
   }, [isRecording]);
 
-  // Snapshot action with Watermark Burned-in at 1080p Full HD
+  // Snapshot action with Watermark Burned-in at 720p HD
   const takeSnapshot = useCallback(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -1577,26 +1577,26 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       viewer.render();
       const canvas = viewer.canvas;
 
-      // Ensure Full HD (1080p) minimum resolution for snapshots based on format
-      let targetW = 1920;
-      let targetH = 1080;
+      // Ensure 720p HD minimum resolution for snapshots based on format
+      let targetW = 1280;
+      let targetH = 720;
       switch (videoFormat) {
         case 'reels':
-          targetW = 1080;
-          targetH = 1920;
+          targetW = 720;
+          targetH = 1280;
           break;
         case 'post':
-          targetW = 1080;
-          targetH = 1080;
+          targetW = 720;
+          targetH = 720;
           break;
         case 'portrait':
-          targetW = 1080;
-          targetH = 1350;
+          targetW = 720;
+          targetH = 900;
           break;
         case 'youtube':
         default:
-          targetW = 1920;
-          targetH = 1080;
+          targetW = 1280;
+          targetH = 720;
           break;
       }
 
@@ -1633,7 +1633,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
       const dataUrl = offscreen.toDataURL('image/png');
       const link = document.createElement('a');
-      link.download = `parsel_1080p_goruntu_${Date.now()}.png`;
+      link.download = `parsel_720p_goruntu_${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
     } catch (e) {
@@ -1642,7 +1642,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     }
   }, [videoFormat]);
 
-  // Start Video Recording with Watermark Burned-in directly into 1080p Full HD MP4 video!
+  // Start Video Recording with Watermark Burned-in directly into 720p HD MP4 video!
   const startVideoRecording = useCallback(async (): Promise<boolean> => {
     const viewer = viewerRef.current;
     if (!viewer) return false;
@@ -1650,34 +1650,34 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
     try {
       const viewerCanvas = viewer.canvas;
 
-      // 1080p Full HD Resolution Sizing according to selected Aspect Ratio
-      let targetW = 1920;
-      let targetH = 1080;
+      // 720p HD Resolution Sizing according to selected Aspect Ratio
+      let targetW = 1280;
+      let targetH = 720;
       switch (videoFormat) {
         case 'reels':
-          // 9:16 Full HD
-          targetW = 1080;
-          targetH = 1920;
+          // 9:16 720p HD
+          targetW = 720;
+          targetH = 1280;
           break;
         case 'post':
-          // 1:1 Full HD
-          targetW = 1080;
-          targetH = 1080;
+          // 1:1 720p HD
+          targetW = 720;
+          targetH = 720;
           break;
         case 'portrait':
-          // 4:5 Full HD
-          targetW = 1080;
-          targetH = 1350;
+          // 4:5 720p HD
+          targetW = 720;
+          targetH = 900;
           break;
         case 'youtube':
         default:
-          // 16:9 Full HD
-          targetW = 1920;
-          targetH = 1080;
+          // 16:9 720p HD
+          targetW = 1280;
+          targetH = 720;
           break;
       }
 
-      // Create offscreen composite canvas strictly at 1080p resolution
+      // Create offscreen composite canvas strictly at 720p resolution
       const recordCanvas = document.createElement('canvas');
       recordCanvas.width = targetW;
       recordCanvas.height = targetH;
@@ -1689,7 +1689,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
       isRecordingRef.current = true;
 
-      // Frame rendering loop: Burns 3D globe + Watermark together at 1080p 30fps
+      // Frame rendering loop: Burns 3D globe + Watermark together at 720p 30fps
       const renderFrame = () => {
         if (!isRecordingRef.current) return;
 
@@ -1702,7 +1702,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
         recordCtx.drawImage(viewerCanvas, drawX, drawY, drawW, drawH);
 
-        // 2. Paint Watermark with active settings at 1080p scale
+        // 2. Paint Watermark with active settings at 720p scale
         renderWatermarkToCanvas(
           recordCtx,
           recordCanvas.width,
@@ -1718,7 +1718,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
       // Start loop
       animFrameIdRef.current = requestAnimationFrame(renderFrame);
 
-      // Capture 30 FPS stream from 1080p composite canvas
+      // Capture 30 FPS stream from 720p composite canvas
       const stream = recordCanvas.captureStream(30);
 
       // MP4 priority
@@ -1740,10 +1740,10 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         }
       }
 
-      // 12 Mbps bitrate for crystal-clear 1080p Full HD video recording
+      // 8 Mbps bitrate for crystal-clear 720p HD video recording
       const recorder = new MediaRecorder(stream, {
         mimeType: selectedMimeType || undefined,
-        videoBitsPerSecond: 12000000,
+        videoBitsPerSecond: 8000000,
       });
 
       recordedChunksRef.current = [];
@@ -1769,7 +1769,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        a.download = `parsel_1080p_video_${Date.now()}.mp4`;
+        a.download = `parsel_720p_video_${Date.now()}.mp4`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
@@ -2254,7 +2254,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
 
     switch (videoFormat) {
       case 'reels': {
-        const maxH = Math.min(960, Math.round(window.innerHeight * (isFull ? 1.0 : 0.88 * scale)));
+        const maxH = Math.min(720, Math.round(window.innerHeight * (isFull ? 1.0 : 0.88 * scale)));
         return {
           height: `${maxH}px`,
           maxHeight: `${maxH}px`,
@@ -2263,7 +2263,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         };
       }
       case 'post': {
-        const maxH = Math.min(760, Math.round(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.84) * scale));
+        const maxH = Math.min(720, Math.round(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.84) * scale));
         return {
           height: `${maxH}px`,
           maxHeight: `${maxH}px`,
@@ -2272,7 +2272,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
         };
       }
       case 'portrait': {
-        const maxH = Math.min(840, Math.round(window.innerHeight * 0.86 * scale));
+        const maxH = Math.min(720, Math.round(window.innerHeight * 0.86 * scale));
         return {
           height: `${maxH}px`,
           maxHeight: `${maxH}px`,
@@ -2288,7 +2288,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
             height: '100%',
           };
         }
-        const maxH = Math.round(window.innerHeight * scale);
+        const maxH = Math.min(720, Math.round(window.innerHeight * scale));
         const maxW = Math.min(window.innerWidth - 24, Math.round(maxH * (16 / 9)));
         return {
           height: `${maxH}px`,
@@ -2577,7 +2577,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
               id="btn-floating-snapshot"
               onClick={takeSnapshot}
               className="group relative flex flex-col items-center justify-center w-10 sm:w-11 py-1 px-0.5 rounded-lg bg-white/5 hover:bg-emerald-500/20 active:bg-emerald-500/30 border border-white/10 hover:border-emerald-400/60 text-slate-200 hover:text-emerald-300 transition-all duration-200 active:scale-95 cursor-pointer"
-              title="HD Fotoğraf Çek (1080p Ekran Görüntüsü İndir)"
+              title="HD Fotoğraf Çek (720p Ekran Görüntüsü İndir)"
             >
               <Camera className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition duration-200" />
               <span className="text-[8px] font-bold mt-0.5 text-slate-300 group-hover:text-emerald-300 tracking-tight leading-tight">
@@ -2644,7 +2644,7 @@ export const CesiumViewer: React.FC<CesiumViewerProps> = ({
                   ? 'bg-rose-600/40 border-rose-500 text-rose-200 shadow-lg shadow-rose-600/30 ring-1 ring-rose-400 animate-pulse'
                   : 'bg-white/5 border-white/10 text-slate-200 hover:bg-rose-500/20 hover:border-rose-400/60 hover:text-rose-300'
               }`}
-              title={isRecording ? 'Video Kaydını Durdur ve MP4 İndir' : '1080p Full HD Video Kaydını Başlat'}
+              title={isRecording ? 'Video Kaydını Durdur ve MP4 İndir' : '720p HD Video Kaydını Başlat'}
             >
               {isRecording ? (
                 <div className="relative flex items-center justify-center">

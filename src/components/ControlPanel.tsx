@@ -218,7 +218,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   // Device type detection for optimal sizing
   const getDeviceInfo = () => {
-    if (typeof window === 'undefined') return { type: 'pc', name: 'PC', label: '💻 PC (1080p)' };
+    if (typeof window === 'undefined') return { type: 'pc', name: 'PC', label: '💻 PC (720p HD)' };
     const w = window.innerWidth;
     if (w < 640) return { type: 'phone', name: 'Telefon', label: '📱 Telefon' };
     if (w < 1024) return { type: 'tablet', name: 'Tablet', label: '📟 Tablet' };
@@ -644,6 +644,58 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {/* TAB: 3D TUR & HARİTA */}
             {activeTab === 'camera' && (
               <div className="space-y-4">
+                {/* 3D Tur Ayarlarını Varsayılan Olarak Kaydetme Kartı (Sekme Başı) */}
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-indigo-500/15 border border-amber-400/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>3D Tur Ayarlarını Varsayılan Yap</span>
+                    </div>
+                    {hasSavedTourDefaults && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
+                        Kayıtlı Profil Aktif
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Dönüş tur hızı ({cameraState.tourSpeed.toFixed(1)}x), kamera mesafesi ({cameraState.range}m), açı ({cameraState.pitch}°) ve altlık haritayı varsayılan olarak kaydedin.
+                  </p>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveTourDefaults}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Varsayılan Olarak Kaydet</span>
+                    </button>
+
+                    {hasSavedTourDefaults && (
+                      <button
+                        type="button"
+                        onClick={handleResetTourDefaults}
+                        className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium transition cursor-pointer"
+                        title="Varsayılan Tur Ayarlarını Sıfırla"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {tourSaveFeedback && (
+                    <div
+                      className={`text-[10px] font-semibold px-2 py-1 rounded text-center animate-in fade-in duration-200 ${
+                        tourSaveFeedback.isError
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {tourSaveFeedback.message}
+                    </div>
+                  )}
+                </div>
+
                 {/* 2D & 3D Görünüm Modu ve Otomatik Kadraj Ortalama */}
                 <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2.5">
                   <div className="flex items-center justify-between">
@@ -960,8 +1012,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                           : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                       }`}
                     >
-                      <div className="text-[10px] font-semibold">💻 PC (1080p)</div>
-                      <div className="text-[8px] opacity-75">16:9 Full HD</div>
+                      <div className="text-[10px] font-semibold">💻 PC (720p HD)</div>
+                      <div className="text-[8px] opacity-75">16:9 HD</div>
                     </button>
                   </div>
                 </div>
@@ -973,7 +1025,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       Video Kadraj Oranı
                     </label>
                     <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-400/20">
-                      1080p Full HD
+                      720p HD
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -986,7 +1038,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">9:16 Reels / Shorts</span>
-                      <span className="text-[10px] opacity-75 font-mono">1080 × 1920 (1080p)</span>
+                      <span className="text-[10px] opacity-75 font-mono">720 × 1280 (720p)</span>
                     </button>
 
                     <button
@@ -998,7 +1050,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">1:1 Gönderi</span>
-                      <span className="text-[10px] opacity-75 font-mono">1080 × 1080 (1080p)</span>
+                      <span className="text-[10px] opacity-75 font-mono">720 × 720 (720p)</span>
                     </button>
 
                     <button
@@ -1010,7 +1062,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">4:5 Portre Feed</span>
-                      <span className="text-[10px] opacity-75 font-mono">1080 × 1350 (1080p)</span>
+                      <span className="text-[10px] opacity-75 font-mono">720 × 900 (720p)</span>
                     </button>
 
                     <button
@@ -1022,7 +1074,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                     >
                       <span className="text-[11px] font-semibold">16:9 Full Screen</span>
-                      <span className="text-[10px] opacity-75 font-mono">1920 × 1080 (Full HD)</span>
+                      <span className="text-[10px] opacity-75 font-mono">1280 × 720 (720p HD)</span>
                     </button>
                   </div>
                 </div>
@@ -1177,64 +1229,64 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     Kuşbakışı
                   </button>
                 </div>
-
-                {/* 3D Tur Ayarlarını Varsayılan Olarak Kaydetme Kartı */}
-                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-indigo-500/15 border border-amber-400/40 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
-                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>3D Tur Ayarlarını Varsayılan Yap</span>
-                    </div>
-                    {hasSavedTourDefaults && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
-                        Kayıtlı Profil Aktif
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-300 leading-relaxed">
-                    Dönüş tur hızı ({cameraState.tourSpeed.toFixed(1)}x), kamera mesafesi ({cameraState.range}m), açı ({cameraState.pitch}°) ve altlık haritayı varsayılan olarak kaydedin.
-                  </p>
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleSaveTourDefaults}
-                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Varsayılan Olarak Kaydet</span>
-                    </button>
-
-                    {hasSavedTourDefaults && (
-                      <button
-                        type="button"
-                        onClick={handleResetTourDefaults}
-                        className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium transition cursor-pointer"
-                        title="Varsayılan Tur Ayarlarını Sıfırla"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {tourSaveFeedback && (
-                    <div
-                      className={`text-[10px] font-semibold px-2 py-1 rounded text-center animate-in fade-in duration-200 ${
-                        tourSaveFeedback.isError
-                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      }`}
-                    >
-                      {tourSaveFeedback.message}
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
             {/* TAB: STİL & GÖRÜNÜM */}
             {activeTab === 'style' && (
               <div className="space-y-4">
+                {/* Stil Ayarlarını Varsayılan Olarak Kaydetme Kartı (Sekme Başı) */}
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-emerald-500/15 border border-amber-400/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Parsel Stilini Varsayılan Yap</span>
+                    </div>
+                    {hasSavedStyleDefaults && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
+                        Kayıtlı Stil Aktif
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Sınır rengi ({parcelStyle.borderColor}), kalınlık ({parcelStyle.borderWidth}px), dolgu rengi, parlama ve cephe boyu tercihlerini varsayılan olarak kaydedin.
+                  </p>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveStyleDefaults}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Varsayılan Olarak Kaydet</span>
+                    </button>
+
+                    {hasSavedStyleDefaults && (
+                      <button
+                        type="button"
+                        onClick={handleResetStyleDefaults}
+                        className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium transition cursor-pointer"
+                        title="Varsayılan Stili Sıfırla"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {styleSaveFeedback && (
+                    <div
+                      className={`text-[10px] font-semibold px-2 py-1 rounded text-center animate-in fade-in duration-200 ${
+                        styleSaveFeedback.isError
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {styleSaveFeedback.message}
+                    </div>
+                  )}
+                </div>
+
                 {/* Sınır Rengi */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -1487,77 +1539,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     </div>
                   )}
                 </div>
-
-                {/* Stil Ayarlarını Varsayılan Olarak Kaydetme Kartı */}
-                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-emerald-500/15 border border-amber-400/40 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
-                      <BookmarkCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>Parsel Stilini Varsayılan Yap</span>
-                    </div>
-                    {hasSavedStyleDefaults && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 font-medium border border-amber-400/40">
-                        Kayıtlı Stil Aktif
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-300 leading-relaxed">
-                    Sınır rengi ({parcelStyle.borderColor}), kalınlık ({parcelStyle.borderWidth}px), dolgu rengi, parlama ve cephe boyu tercihlerini varsayılan olarak kaydedin.
-                  </p>
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleSaveStyleDefaults}
-                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Varsayılan Olarak Kaydet</span>
-                    </button>
-
-                    {hasSavedStyleDefaults && (
-                      <button
-                        type="button"
-                        onClick={handleResetStyleDefaults}
-                        className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-slate-300 hover:text-red-300 text-xs font-medium transition cursor-pointer"
-                        title="Varsayılan Stili Sıfırla"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {styleSaveFeedback && (
-                    <div
-                      className={`text-[10px] font-semibold px-2 py-1 rounded text-center animate-in fade-in duration-200 ${
-                        styleSaveFeedback.isError
-                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      }`}
-                    >
-                      {styleSaveFeedback.message}
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
             {/* TAB 5: FİRMA BİLGİLERİ (FİLİGRAN) */}
             {activeTab === 'watermark' && (
               <div className="space-y-3.5">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                  <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">
-                    Filigran Kartını Göster
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={watermarkConfig.visible}
-                    onChange={(e) => onWatermarkChange({ visible: e.target.checked })}
-                    className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
-                  />
-                </div>
-
-                {/* Firma Bilgilerini Varsayılan Olarak Kaydet & Yönet */}
+                {/* Firma Bilgilerini Varsayılan Olarak Kaydet & Yönet (Sekme Başı) */}
                 <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 via-sky-500/10 to-emerald-500/15 border border-amber-400/40 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs">
@@ -1619,6 +1607,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       </>
                     )}
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">
+                    Filigran Kartını Göster
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={watermarkConfig.visible}
+                    onChange={(e) => onWatermarkChange({ visible: e.target.checked })}
+                    className="w-4 h-4 accent-sky-400 cursor-pointer rounded"
+                  />
                 </div>
 
                 {/* Firma Adı */}
@@ -1896,14 +1896,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <div className="p-3.5 rounded-xl bg-gradient-to-br from-sky-500/10 to-blue-500/5 border border-sky-500/20">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-sky-300">
-                      Sinematik 3D Video & Fotoğraf (1080p MP4)
+                      Sinematik 3D Video & Fotoğraf (720p MP4)
                     </span>
                     <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-400/30">
-                      1080p Full HD
+                      720p HD
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-300">
-                    Instagram Reels, TikTok veya YouTube için filigranlı ve 3D kamera turlu 1080p Full HD kalitesinde MP4 formatında video kaydedin.
+                    Instagram Reels, TikTok veya YouTube için filigranlı ve 3D kamera turlu 720p HD kalitesinde MP4 formatında video kaydedin.
                   </p>
                 </div>
 
@@ -1911,10 +1911,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider block">
-                      3D Video Kaydı (1080p MP4)
+                      3D Video Kaydı (720p MP4)
                     </label>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">
-                      1080p MP4
+                      720p MP4
                     </span>
                   </div>
 
@@ -1924,7 +1924,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-red-500/30 animate-pulse cursor-pointer"
                     >
                       <Square className="w-4 h-4 fill-white" />
-                      <span>Kaydı Durdur ve 1080p MP4 İndir</span>
+                      <span>Kaydı Durdur ve 720p MP4 İndir</span>
                     </button>
                   ) : (
                     <button
@@ -1938,11 +1938,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 hover:brightness-110 transition cursor-pointer"
                     >
                       <VideoIcon className="w-4 h-4" />
-                      <span>1080p MP4 Video Kaydını Başlat</span>
+                      <span>720p MP4 Video Kaydını Başlat</span>
                     </button>
                   )}
                   <p className="text-[10px] text-slate-400 text-center">
-                    Kayıt başlarken 3D sinematik tur devreye girer ve video 1080p yüksek çözünürlüklü MP4 olarak indirilir.
+                    Kayıt başlarken 3D sinematik tur devreye girer ve video 720p yüksek kaliteli MP4 olarak indirilir.
                   </p>
                 </div>
 
